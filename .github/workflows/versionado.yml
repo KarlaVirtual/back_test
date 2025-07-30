@@ -1,41 +1,30 @@
-name: Bump version
+name: Versionado con TAG
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
-  bump-version:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout del repositorio
+        uses: actions/checkout@v3
 
-      - name: Set up Git
+      - name: Configurar Git
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+          git config --global user.email "karla@example.com"
+          git config --global user.name "Karla Ramirez"
 
-      - name: Bump version in VERSION.txt
-        run: |
-          VERSION=$(cat VERSION.txt)
-          IFS='.' read -r major minor patch <<< "$VERSION"
-          patch=$((patch + 1))
-          NEW_VERSION="$major.$minor.$patch"
-          echo "$NEW_VERSION" > VERSION.txt
+      - name: Leer versión del archivo VERSION.txt
+        id: version
+        run: echo "VERSION=$(cat VERSION.txt)" >> $GITHUB_OUTPUT
 
-      - name: Commit version change
+      - name: Crear tag con la versión
         run: |
-          git add VERSION.txt
-          git commit -m "Bump versión automática: v$(cat VERSION.txt)"
+          git tag ${{ steps.version.outputs.VERSION }}
 
-      - name: Push tag to GitHub
-        run: |
-          git config user.name "KarlaVirtual"
-          git config user.email "karla.ramirez@virtualsoft.tech"
-          git remote set-url origin https://x-access-token:${MY_GH_TOKEN}@github.com/KarlaVirtual/back_test.git
-          git push origin --tags
-        env:
-          MY_GH_TOKEN: ${{ secrets.MY_GH_TOKEN }}
+      - name: Push tag a GitHub
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.MY_GH_TOKEN }}
