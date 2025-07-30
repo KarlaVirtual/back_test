@@ -1,47 +1,57 @@
-name: Versionar y crear imagen
+# Pipeline para hacer bump automático de versión y push al repo
+
+name: Bump versión
 
 on:
   push:
     branches:
-      - main
+      - main  # Solo se ejecuta en la rama main
 
 jobs:
-  versionar_y_empaquetar:
+  bump-version:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Clonar repositorio
-        uses: actions/checkout@v3
+      # Paso 1: Checkout del repo
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0  # Necesario para que git detecte correctamente los tags
 
-      - name: Leer y actualizar la versión
-        id: version
-        run: |
-          echo "Leyendo versión actual..."
-          VERSION=$(cat VERSION.txt)
-          RAW=${VERSION#v}
-
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$RAW"
-          PATCH=$((PATCH + 1))
-          NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
-          echo "$NEW_VERSION" > VERSION.txt
-          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Commit y push con nueva versión
+      # Paso 2: Configurar Git
+      - name: Configurar usuario Git
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add VERSION.txt
-          git commit -m "Bump versión automática: ${{ steps.version.outputs.version }}"
-          git push origin main
 
-      - name: Crear tag
+      # Paso 3: Leer y actualizar la versión
+      - name: Bump versión automáticamente
+        id: bump_version
         run: |
-          git tag ${{ steps.version.outputs.version }}
-          git push origin ${{ steps.version.outputs.version }}
+          # Buscar el último tag
+          LAST_TAG=$(git describe --tags --abbrev=0)
+          echo "Última versión: $LAST_TAG"
 
-      - name: Crear carpeta de imágenes y empaquetar backend
+          # Separar en partes
+          VERSION_PARTS=(${LAST_TAG//./ })
+          MAJOR=${VERSION_PARTS[0]#v}
+          MINOR=${VERSION_PARTS[1]}
+          PATCH=${VERSION_PARTS[2]}
+
+          # Incrementar PATCH
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="v$MAJOR.$MINOR.$NEW_PATCH"
+
+          echo "Nueva versión: $NEW_VERSION"
+
+          # Crear nuevo tag
+          git tag $NEW_VERSION
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      # Paso 4: Push del nuevo tag usando el token
+      - name: Hacer push con token
+        env:
+          MY_GH_TOKEN: ${{ secrets.MY_GH_TOKEN }}
         run: |
-          mkdir -p IMAGES
-          tar -czvf IMAGES/prueba-${{ steps.version.outputs.version }}.tar.gz api/
-          echo "Imagen: IMAGES/prueba-${{ steps.version.outputs.version }}.tar.gz"
+          git remote set-url origin https://x-access-token:${MY_GH_TOKEN}@github.com/${{ github.repository }}
+          git push origin --tags
