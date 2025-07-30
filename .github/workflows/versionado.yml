@@ -14,7 +14,7 @@ jobs:
 
       - name: Bump version
         run: |
-          CURRENT_VERSION=$(grep version pyproject.toml | head -n 1 | cut -d '"' -f2)
+          CURRENT_VERSION=$(grep version VERSION.txt | head -n 1 | cut -d '"' -f2)
           echo "Versión actual: $CURRENT_VERSION"
           IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
           NEW_VERSION="$major.$minor.$((patch+1))"
