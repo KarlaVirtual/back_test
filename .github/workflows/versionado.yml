@@ -14,12 +14,12 @@ jobs:
 
       - name: Bump version
         run: |
-          CURRENT_VERSION=$(grep version VERSION.txt | head -n 1 | cut -d '"' -f2)
+          CURRENT_VERSION=$(cat VERSION.txt | tr -d 'v')
           echo "Versión actual: $CURRENT_VERSION"
           IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
           NEW_VERSION="$major.$minor.$((patch+1))"
-          echo "Nueva versión: $NEW_VERSION"
-          sed -i "s/version = \".*\"/version = \"$NEW_VERSION\"/" VERSION.txt
+          echo "Nueva versión: v$NEW_VERSION"
+          echo "v$NEW_VERSION" > VERSION.txt
           git config user.name "KarlaVirtual"
           git config user.email "karla.ramirez@virtualsoft.tech"
           git commit -am "Bump versión automática: v$NEW_VERSION"
