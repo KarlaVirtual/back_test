@@ -1,30 +1,33 @@
-name: Versionado con TAG
+name: Bump version and push tags
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
-  build:
+  version-bump:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout del repositorio
-        uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Configurar Git
+      - name: Bump version
         run: |
-          git config --global user.email "karla@example.com"
-          git config --global user.name "Karla Ramirez"
+          CURRENT_VERSION=$(grep version pyproject.toml | head -n 1 | cut -d '"' -f2)
+          echo "Versión actual: $CURRENT_VERSION"
+          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+          NEW_VERSION="$major.$minor.$((patch+1))"
+          echo "Nueva versión: $NEW_VERSION"
+          sed -i "s/version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
+          git config user.name "KarlaVirtual"
+          git config user.email "karla.ramirez@virtualsoft.tech"
+          git commit -am "Bump versión automática: v$NEW_VERSION"
+          git tag "v$NEW_VERSION"
 
-      - name: Leer versión del archivo VERSION.txt
-        id: version
-        run: echo "VERSION=$(cat VERSION.txt)" >> $GITHUB_OUTPUT
-
-      - name: Establecer remote autenticado con token
+      - name: Push cambios y tags
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          git remote set-url origin https://karlaVirtual:${{ secrets.GH_TOKEN }}@github.com/KarlaVirtual/back_test.git
-
-      - name: Crear y pushear tag con versión
-        run: |
-          git tag ${{ steps.version.outputs.VERSION }}
-          git push origin ${{ steps.version.outputs.VERSION }}
+          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/KarlaVirtual/back_test.git
+          git push origin main --follow-tags
