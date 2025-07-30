@@ -1,57 +1,41 @@
-# Pipeline para hacer bump automático de versión y push al repo
-
-name: Bump versión
+name: Bump version
 
 on:
   push:
     branches:
-      - main  # Solo se ejecuta en la rama main
+      - main
 
 jobs:
   bump-version:
     runs-on: ubuntu-latest
 
     steps:
-      # Paso 1: Checkout del repo
-      - name: Checkout del repositorio
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Necesario para que git detecte correctamente los tags
 
-      # Paso 2: Configurar Git
-      - name: Configurar usuario Git
+      - name: Set up Git
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-      # Paso 3: Leer y actualizar la versión
-      - name: Bump versión automáticamente
-        id: bump_version
+      - name: Bump version in VERSION.txt
         run: |
-          # Buscar el último tag
-          LAST_TAG=$(git describe --tags --abbrev=0)
-          echo "Última versión: $LAST_TAG"
+          VERSION=$(cat VERSION.txt)
+          IFS='.' read -r major minor patch <<< "$VERSION"
+          patch=$((patch + 1))
+          NEW_VERSION="$major.$minor.$patch"
+          echo "$NEW_VERSION" > VERSION.txt
 
-          # Separar en partes
-          VERSION_PARTS=(${LAST_TAG//./ })
-          MAJOR=${VERSION_PARTS[0]#v}
-          MINOR=${VERSION_PARTS[1]}
-          PATCH=${VERSION_PARTS[2]}
+      - name: Commit version change
+        run: |
+          git add VERSION.txt
+          git commit -m "Bump versión automática: v$(cat VERSION.txt)"
 
-          # Incrementar PATCH
-          NEW_PATCH=$((PATCH + 1))
-          NEW_VERSION="v$MAJOR.$MINOR.$NEW_PATCH"
-
-          echo "Nueva versión: $NEW_VERSION"
-
-          # Crear nuevo tag
-          git tag $NEW_VERSION
-          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-
-      # Paso 4: Push del nuevo tag usando el token
-      - name: Hacer push con token
+      - name: Push changes
         env:
-          MY_GH_TOKEN: ${{ secrets.MY_GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          git remote set-url origin https://x-access-token:${MY_GH_TOKEN}@github.com/${{ github.repository }}
-          git push origin --tags
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/KarlaVirtual/back_test.git
+          git push origin main
