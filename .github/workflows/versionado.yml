@@ -19,7 +19,7 @@ jobs:
           IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
           NEW_VERSION="$major.$minor.$((patch+1))"
           echo "Nueva versión: $NEW_VERSION"
-          sed -i "s/version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
+          sed -i "s/version = \".*\"/version = \"$NEW_VERSION\"/" VERSION.txt
           git config user.name "KarlaVirtual"
           git config user.email "karla.ramirez@virtualsoft.tech"
           git commit -am "Bump versión automática: v$NEW_VERSION"
