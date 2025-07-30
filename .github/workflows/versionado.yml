@@ -29,5 +29,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/KarlaVirtual/back_test.git
+          git config --global user.email "karla@example.com" # Ajusta si quieres
+          git config --global user.name "Karla"              # Opcional pero recomendable
+          git remote set-url origin https://KarlaVirtual:${GH_TOKEN}@github.com/KarlaVirtual/back_test.git
           git push origin main --follow-tags
