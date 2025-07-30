@@ -1,0 +1,47 @@
+name: Versionar y crear imagen
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  versionar_y_empaquetar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Leer y actualizar la versión
+        id: version
+        run: |
+          echo "Leyendo versión actual..."
+          VERSION=$(cat VERSION.txt)
+          RAW=${VERSION#v}
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$RAW"
+          PATCH=$((PATCH + 1))
+          NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
+          echo "$NEW_VERSION" > VERSION.txt
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Commit y push con nueva versión
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add VERSION.txt
+          git commit -m "Bump versión automática: ${{ steps.version.outputs.version }}"
+          git push origin main
+
+      - name: Crear tag
+        run: |
+          git tag ${{ steps.version.outputs.version }}
+          git push origin ${{ steps.version.outputs.version }}
+
+      - name: Crear carpeta de imágenes y empaquetar backend
+        run: |
+          mkdir -p IMAGES
+          tar -czvf IMAGES/prueba-${{ steps.version.outputs.version }}.tar.gz api/
+          echo "Imagen: IMAGES/prueba-${{ steps.version.outputs.version }}.tar.gz"
