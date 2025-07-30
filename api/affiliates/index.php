@@ -110,7 +110,6 @@ $_ENV["NOLOYALTY"] = 1;
 $dir_ip=getenv('HTTP_CLIENT_IP');
 if($dir_ip != '' && strpos($dir_ip,'172.105.16.250','') !== false && false){
 
-
     print_r($_SERVER);
 // Allow from any origin
     if (isset($_SERVER['HTTP_ORIGIN'])) {
