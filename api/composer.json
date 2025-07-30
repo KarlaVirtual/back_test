@@ -1,0 +1,48 @@
+{
+    "name": "vendor/dao",
+    "description": "description_text",
+    "minimum-stability": "stable",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "author's name",
+            "email": "email@example.com"
+        }
+    ],
+    "require": {
+        "google/apiclient": "^2.8",
+        "ext-json": "*",
+        "dompdf/dompdf": "1.0.2",
+        "fguillot/json-rpc": "^1.2",
+        "paypal/paypal-checkout-sdk": "^1.0",
+        "mpdf/mpdf": "^8.1",
+        "psr/log": "^2.0",
+        "balint-horvath/dotenv-php": "^1.0",
+        "vlucas/phpdotenv": "^5.6",
+        "kreait/firebase-php": "^6.9.6",
+        "elasticsearch/elasticsearch": "^8.17"
+    },
+    "autoload": {
+        "psr-4": {
+            "Backend\\": "src",
+            "mascotgaming\\": "src/imports/mascotgaming/src"
+        }
+    },
+    "scripts": {
+        "post-install-cmd": [
+            "Dotenv\\Dotenv::createImmutable(__DIR__)->load();"
+        ],
+        "post-update-cmd": [
+            "Dotenv\\Dotenv::createImmutable(__DIR__)->load();"
+        ]
+    },
+    "config": {
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
+    },
+    "require-dev": {
+        "squizlabs/php_codesniffer": "^3.12",
+        "phpcompatibility/php-compatibility": "^9.3"
+    }
+}

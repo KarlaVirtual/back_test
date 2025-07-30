@@ -1,0 +1,21 @@
+{
+    "playerId":"body->userId",
+    "account":"body->accountIdentifier",
+    "sessionId":"body->sessionId",
+    "externalUserId":"body->externalUserId",
+    "gameId":"body->game",
+    "currency":"body->currency",
+    "operatorId":"body->opeatorId",
+    "token":"body->token",
+    "timestamp":"body->timestamp",
+    "signature":"body->signature",
+    "id":"body->id",
+    "bonusId":"body->param->bonusId",
+    "hash":"body->md5",
+    "userId":"body->userId",
+    "merchId":"body->merch_id",
+    "merchPwd":"body->merch_pwd",
+    "acctid":"body->acctid",
+    "cur":"body->cur",
+    "partnerPlayerId":"body->partnerPlayerId"
+}

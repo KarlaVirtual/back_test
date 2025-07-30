@@ -1,0 +1,17 @@
+{
+    "responseGameTransactionId":"responseG->transaccionId",
+    "transactionId":"transaccionId",
+    "balance":"responseG->saldo * (100, 1000, 100000)",
+    "currency":"UsuarioMandante->moneda",
+    "bonus":0,
+    "errorCode":0,
+    "message":"ok",
+    "userId":"$responseG->usuarioId",
+    "provider":"$this->provider",
+    "roundId":"$roundId",
+    "oldBalance":"$responseG->saldo - $rollbackAmount",
+    "gameId":"$gameId",
+    "status":"$this->status",
+    "date":"$this->date",
+    "token":"$this->token"
+}

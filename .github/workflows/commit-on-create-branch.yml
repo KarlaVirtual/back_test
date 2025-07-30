@@ -1,0 +1,42 @@
+name: Comment when creating branch
+
+on:
+  create:
+    ref_type: branch
+
+permissions:
+  contents: write  # Asegúrate de tener permisos de escritura
+
+jobs:
+  comentar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clonar el repositorio
+        uses: actions/checkout@v2
+        
+      - name: Listar directorios
+        run: ls -la
+
+
+      - name: Perform a general comment push
+        run: |
+          echo "Creating a new branch: ${{ github.ref }}" > comment.txt
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git add comment.txt
+          git commit -m "Comment: Creating a new branch" || echo "No changes to commit"
+          git push origin HEAD:${{ github.ref }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+      - name: Perform a general comment push
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git rm comment.txt
+          git commit -m "Comment: Delete comment.txt" || echo "No changes to commit"
+          git push origin HEAD:${{ github.ref }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,23 @@
+{
+    "status":200,
+    "currency":"",
+    "balance":"",
+    "transactionId":"",
+    "responseGameTransactionId":"",
+    "bonus":0,
+    "errorCode":1000,
+    "message":"",
+    "date":"",
+    "token":"",
+    "userId":"",
+    "requestUUID":"",
+    "request":"",
+    "sessionId":"",
+    "operatorId":"",
+    "roundId":"",
+    "signature":"",
+    "id":"",
+    "amount":"",
+    "provider":"",
+    "oldBalance":"$responseG->saldo - $amount"
+}

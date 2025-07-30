@@ -1,0 +1,2200 @@
+<?php
+
+/**
+ * Clase Ezugin.
+ *
+ * Este archivo forma parte de las integraciones del casino y contiene métodos
+ * relacionados con la gestión de transacciones y usuarios en el sistema.
+ *
+ * @category Red
+ * @package  API
+ * @author   Desconocido
+ * @version  1.0.0
+ * @since    2025-04-27
+ */
+
+namespace Backend\integrations\casino;
+
+use Backend\dto\Categoria;
+use Backend\dto\CategoriaProducto;
+use Backend\dto\Clasificador;
+use Backend\dto\ConfigurationEnvironment;
+use Backend\dto\Mandante;
+use Backend\dto\PuntoVenta;
+use Backend\dto\Subproveedor;
+use Backend\dto\SubproveedorMandantePais;
+use Backend\dto\TransaccionJuego;
+use Backend\dto\TransaccionProducto;
+use Backend\dto\TransjuegoLog;
+use Backend\dto\TransaccionApi;
+use Backend\dto\TransprodLog;
+use Backend\dto\Usuario;
+use Backend\dto\UsuarioConfiguracion;
+use Backend\dto\UsuarioHistorial;
+use Backend\dto\UsuarioMandante;
+use Backend\dto\UsuarioPerfil;
+use Backend\dto\UsuarioSession;
+use Backend\dto\UsuarioToken;
+use Backend\dto\Producto;
+use Backend\dto\ProductoMandante;
+use Backend\dto\Proveedor;
+use Backend\mysql\TransaccionJuegoMySqlDAO;
+use Backend\mysql\TransaccionProductoMySqlDAO;
+use Backend\mysql\TransaccionApiMySqlDAO;
+use Backend\mysql\UsuarioHistorialMySqlDAO;
+use Backend\mysql\UsuarioTokenMySqlDAO;
+use Backend\websocket\WebsocketUsuario;
+
+use Exception;
+
+/**
+ * Clase Ezugin
+ *
+ * Esta clase contiene métodos relacionados con la integración del proveedor Ezugin,
+ * incluyendo la gestión de transacciones, usuarios y operaciones específicas del casino.
+ */
+class Ezugin
+{
+    /**
+     * Identificador del operador.
+     *
+     * @var integer
+     */
+    private $operadorId;
+
+    /**
+     * Token de autenticación.
+     *
+     * @var string
+     */
+    private $token;
+
+    /**
+     * Identificador único del usuario.
+     *
+     * @var string
+     */
+    private $uid;
+
+    /**
+     * Objeto para gestionar transacciones API.
+     *
+     * @var TransaccionApi
+     */
+    private $transaccionApi;
+
+    /**
+     * Datos asociados a la transacción.
+     *
+     * @var array
+     */
+    private $data;
+
+    /**
+     * Constructor de la clase Ezugin.
+     *
+     * Inicializa los valores del operador, token y UID.
+     *
+     * @param integer $operadorId Identificador del operador.
+     * @param string  $token      Token de autenticación.
+     * @param string  $uid        Opcional Identificador único del usuario.
+     */
+    public function __construct($operadorId, $token, $uid = "")
+    {
+        $this->operadorId = $operadorId;
+        $this->operadorId = 10178001;
+        $this->token = $token;
+        $this->uid = $uid;
+    }
+
+    /**
+     * Obtiene el identificador del operador.
+     *
+     * @return integer Retorna el identificador del operador.
+     */
+    public function getOperadorId()
+    {
+        return $this->operadorId;
+    }
+
+    /**
+     * Autentica un usuario y valida el token proporcionado.
+     *
+     * Este método realiza las siguientes acciones:
+     * - Verifica que el token no esté vacío.
+     * - Valida el estado del token.
+     * - Obtiene información del usuario y su mandante.
+     * - Actualiza el estado del token a inactivo.
+     * - Calcula el balance del usuario según su perfil.
+     * - Retorna un JSON con los datos del usuario autenticado.
+     *
+     * @return string JSON con los datos del usuario autenticado o un error.
+     * @throws Exception Si el token está vacío o inactivo.
+     */
+    public function Auth()
+    {
+        try {
+            $Proveedor = new Proveedor("", "EZZG");
+
+            $this->transaccionApi = new TransaccionApi();
+            $this->transaccionApi->setTransaccionId('0');
+            $this->transaccionApi->setTipo("AUTH");
+            $this->transaccionApi->setProveedorId($Proveedor->getProveedorId());
+            $this->transaccionApi->setTValue('');
+            $this->transaccionApi->setUsucreaId(0);
+            $this->transaccionApi->setUsumodifId(0);
+            $this->transaccionApi->setValor(0);
+
+
+            if ($this->token == "") {
+                throw new Exception("Token vacio", "10011");
+            }
+
+            $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+            if ($UsuarioToken->getEstado() != 'A') {
+                throw new Exception("Token Inactivo", "10030");
+            }
+
+            $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+            $Mandante = new Mandante($UsuarioMandante->mandante);
+
+            $UsuarioToken->setEstado('I');
+
+            $UsuarioTokenMySqlDAO = new UsuarioTokenMySqlDAO();
+
+            $UsuarioTokenMySqlDAO->update($UsuarioToken);
+
+            $UsuarioTokenMySqlDAO->getTransaction()->commit();
+
+            if ($Mandante->propio == "S") {
+                $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+                $UsuarioPerfil = new UsuarioPerfil($UsuarioMandante->usuarioMandante);
+
+                switch ($UsuarioPerfil->getPerfilId()) {
+                    case "USUONLINE":
+
+                        $Balance = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                        break;
+
+                    case "MAQUINAANONIMA":
+
+
+                        /*$PuntoVenta = new PuntoVenta("",$UsuarioMandante->usuarioMandante);
+
+                        $SaldoRecargas = $PuntoVenta->getCupoRecarga();
+                        $SaldoJuego = $PuntoVenta->getCreditosBase();
+
+                        $Balance = $SaldoJuego;*/
+
+                        $Balance = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+
+                        break;
+                }
+
+
+                $return = array(
+
+                    "operatorId" => $this->getOperadorId(),
+                    "uid" => strtolower($UsuarioMandante->usumandanteId),
+
+                    "token" => $this->token,
+                    "balance" => $Balance,
+                    "currency" => $Usuario->moneda,
+                    "language" => strtolower($Usuario->idioma),
+                    "clientIP" => explode(',', $Usuario->dirIp)[0],
+                    "VIP" => '0',
+                    "errorCode" => 0,
+                    "errorDescription" => "ok",
+                    "timestamp" => (round(microtime(true) * 1000))
+                );
+
+                return json_encode($return);
+            }
+        } catch (Exception $e) {
+            return $this->convertError($e->getCode(), $e->getMessage());
+        }
+    }
+
+    /**
+     * Realiza un débito en el sistema.
+     *
+     * Este método procesa una transacción de débito para un usuario en un juego específico.
+     * Valida los datos de entrada, verifica límites, registra la transacción y actualiza el saldo del usuario.
+     *
+     * @param string  $gameId        Identificador del juego.
+     * @param string  $uid           Identificador único del usuario.
+     * @param integer $betTypeID     Tipo de apuesta.
+     * @param string  $currency      Moneda utilizada en la transacción.
+     * @param float   $debitAmount   Monto a debitar.
+     * @param string  $serverId      Identificador del servidor.
+     * @param string  $roundId       Identificador de la ronda.
+     * @param string  $transactionId Identificador único de la transacción.
+     * @param string  $seatId        Identificador del asiento.
+     * @param string  $hash          Hash de seguridad para validar la transacción.
+     *
+     * @return string JSON con los detalles de la transacción o un error.
+     * @throws Exception Si ocurre algún error durante el proceso.
+     */
+    public function Debit($gameId, $uid, $betTypeID, $currency, $debitAmount, $serverId, $roundId, $transactionId, $seatId, $hash)
+    {
+        $timeG = time();
+
+        $datos = array(
+            "token" => $this->token,
+            "operatorId" => $this->operadorId,
+            "gameId" => $gameId,
+            "seatId" => $seatId,
+            "uid" => $uid,
+            "betTypeID" => $betTypeID,
+            "currency" => $currency,
+            "debitAmount" => $debitAmount,
+            "serverId" => $serverId,
+            "roundId" => $roundId,
+            "transactionId" => $transactionId,
+            "hash" => $hash
+
+        );
+        try {
+            //syslog(10,'EZUGI-DEBIT1 ' .$transactionId . time());
+
+        } catch (Exception $e) {
+        }
+
+        $this->data = $datos;
+
+        try {
+            /*  Obtenemos el Proveedor con el abreviado EZZG */
+            $Proveedor = new Proveedor("", "EZZG");
+
+            /*  Creamos la Transaccion API  */
+            $this->transaccionApi = new TransaccionApi();
+            $this->transaccionApi->setTransaccionId($transactionId);
+            $this->transaccionApi->setTipo("DEBIT");
+            $this->transaccionApi->setProveedorId($Proveedor->getProveedorId());
+            $this->transaccionApi->setTValue(json_encode($datos));
+            $this->transaccionApi->setUsucreaId(0);
+            $this->transaccionApi->setUsumodifId(0);
+            $this->transaccionApi->setValor($debitAmount);
+
+            /*  Verificamos que el monto a debitar sea positivo */
+            if ($debitAmount < 0) {
+                throw new Exception("No puede ser negativo el monto a debitar.", "10002");
+            }
+
+            /*  Verificamos que el uid no sea vacio */
+            if ($uid == "" || ! is_numeric($uid)) {
+                throw new Exception("UID vacio", "10013");
+            }
+
+            /*  Obtenemos el Usuario Mandante con el UID */
+            $UsuarioMandante = new UsuarioMandante($uid);
+
+
+            try {
+                //syslog(10,'EZUGI-DEBIT2 ' .$transactionId . time());
+
+            } catch (Exception $e) {
+            }
+
+            /*  Obtenemos el Usuario Token con el token */
+            $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+            /*  Obtenemos el Usuario Mandante con el Usuario Token */
+            $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+            if ($UsuarioMandante->usumandanteId == 16 && false) {
+                $result = '0';
+                if ($Proveedor->getTipo() == 'CASINO') {
+                    $UsuarioConfiguracion = new UsuarioConfiguracion();
+
+                    $UsuarioConfiguracion->setUsuarioId($UsuarioMandante->usuarioMandante);
+                    $result = $UsuarioConfiguracion->verifyLimitesCasino($this->transaccionApi->getValor());
+                } elseif ($Proveedor->getTipo() == 'LIVECASINO') {
+                    $UsuarioConfiguracion = new UsuarioConfiguracion();
+
+                    $UsuarioConfiguracion->setUsuarioId($UsuarioMandante->usuarioMandante);
+                    $result = $UsuarioConfiguracion->verifyLimitesCasinoVivo($this->transaccionApi->getValor());
+                }
+
+                if ($result != '0') {
+                    throw new Exception("Limite de Autoexclusion", $result);
+                }
+            }
+
+
+            if ( ! in_array($betTypeID, array(1, 3, 4, 5, 6, 7, 16, 17, 18, 19, 24, 27))) {
+                $return = array(
+                    "operatorId" => $this->getOperadorId(),
+                    "uid" => $UsuarioMandante->usumandanteId,
+                    "token" => $this->token,
+                    "balance" => 0,
+                    "currency" => $currency,
+                    "roundId" => $roundId,
+                    "errorCode" => 1,
+                    "errorDescription" => "General Error",
+                    "timestamp" => (round(microtime(true) * 1000))
+                );
+                return (json_encode($return));
+            }
+
+
+            $this->transaccionApi->setIdentificador($roundId . $UsuarioMandante->getUsumandanteId() . "STI" . $betTypeID . $seatId);
+
+
+            try {
+                //syslog(10, 'EZUGI-DEBIT3 ' . $transactionId . time());
+
+            } catch (Exception $e) {
+            }
+
+            /*  Obtenemos el producto con el gameId  */
+            $Producto = new Producto("", $gameId, $Proveedor->getProveedorId());
+            $Subproveedor = new Subproveedor($Producto->getSubproveedorId());
+
+            $ConfigurationEnvironment = new ConfigurationEnvironment();
+            if ($ConfigurationEnvironment->isDevelopment() || in_array($UsuarioMandante->mandante, array(0, 18, 19))) {
+                $result = '0';
+                if ($Subproveedor->getTipo() == 'CASINO') {
+                    $UsuarioConfiguracion = new UsuarioConfiguracion();
+
+                    $UsuarioConfiguracion->setUsuarioId($UsuarioMandante->usuarioMandante);
+                    $result = $UsuarioConfiguracion->verifyLimitesCasino($this->transaccionApi->getValor(), $UsuarioMandante);
+                } elseif ($Subproveedor->getTipo() == 'LIVECASINO') {
+                    $UsuarioConfiguracion = new UsuarioConfiguracion();
+
+                    $UsuarioConfiguracion->setUsuarioId($UsuarioMandante->usuarioMandante);
+                    $result = $UsuarioConfiguracion->verifyLimitesCasinoVivo($this->transaccionApi->getValor(), $UsuarioMandante);
+                }
+
+                if ($result != '0') {
+                    throw new Exception("Limite de Autoexclusion", $result);
+                }
+            }
+
+
+            $SubproveedorMandantePais = new SubproveedorMandantePais('', $Producto->subproveedorId, $UsuarioMandante->mandante, $UsuarioMandante->paisId);
+
+            if ($SubproveedorMandantePais->getEstado() == "I") {
+                throw new Exception("Proveedor Inactivado.", "21010");
+            }
+
+
+            /*  Obtenemos el producto Mandante para saber si el mandante tiene habilitado el juego  */
+            $ProductoMandante = new ProductoMandante($Producto->getProductoId(), $UsuarioMandante->getMandante());
+
+            /*  Agregamos Elementos a la Transaccion API  */
+            $this->transaccionApi->setProductoId($ProductoMandante->prodmandanteId);
+            $this->transaccionApi->setUsuarioId($UsuarioMandante->getUsumandanteId());
+
+
+            /*  Verificamos que la transaccionId no se haya procesado antes  */
+            if ($this->transaccionApi->existsTransaccionIdAndProveedor("OK")) {
+                /*  Si la transaccionId ha sido procesada, reportamos el error  */
+                throw new Exception("Transaccion ya procesada", "10001");
+            }
+
+            /*  Creamos la Transaccion API Para verificar si hay antes hubo algun ROLLBACK antes */
+            $TransaccionApiRollback = new TransaccionApi();
+            $TransaccionApiRollback->setProveedorId($Proveedor->getProveedorId());
+            $TransaccionApiRollback->setProductoId($ProductoMandante->prodmandanteId);
+            $TransaccionApiRollback->setUsuarioId($UsuarioMandante->getUsumandanteId());
+            $TransaccionApiRollback->setTransaccionId('ROLLBACK' . $transactionId);
+            $TransaccionApiRollback->setTipo("ROLLBACK");
+            $TransaccionApiRollback->setTValue(json_encode($datos));
+            $TransaccionApiRollback->setUsucreaId(0);
+            $TransaccionApiRollback->setUsumodifId(0);
+
+
+            /*  Verificamos que la transaccionId no se haya procesado antes  */
+            if ($TransaccionApiRollback->existsTransaccionIdAndProveedor("ERROR")) {
+                /*  Si la transaccionId tiene un Rollback antes, reportamos el error  */
+                throw new Exception("Transaccion con Rollback antes", "10004");
+            }
+
+            /*  Creamos la Transaccion por el Juego  */
+            $TransaccionJuego = new TransaccionJuego();
+            $TransaccionJuego->setProductoId($ProductoMandante->prodmandanteId);
+            $TransaccionJuego->setTransaccionId($transactionId);
+            $TransaccionJuego->setTicketId($roundId . $UsuarioMandante->getUsumandanteId() . "STI" . $betTypeID . $seatId);
+            $TransaccionJuego->setValorTicket($debitAmount);
+            $TransaccionJuego->setValorPremio(0);
+            $TransaccionJuego->setMandante($UsuarioMandante->mandante);
+            $TransaccionJuego->setUsuarioId($UsuarioMandante->usumandanteId);
+            $TransaccionJuego->setEstado("A");
+            $TransaccionJuego->setUsucreaId(0);
+            $TransaccionJuego->setUsumodifId(0);
+            $TransaccionJuego->setPremiado('N');
+            $TransaccionJuego->setFechaPago(date('Y-m-d H:i:s'));
+
+            $ExisteTicket = false;
+
+            /*  Verificamos si existe el ticket_id antes, de ser positivo, tendriamos que combinar las apuestas  */
+            if ($TransaccionJuego->existsTicketId()) {
+                $ExisteTicket = true;
+            }
+
+            /*  Obtenemos el mandante para verificar sus caracteristicas  */
+            $Mandante = new Mandante($UsuarioMandante->mandante);
+
+
+            try {
+                //syslog(10,'EZUGI-DEBIT4 ' .$transactionId . time());
+
+            } catch (Exception $e) {
+            }
+
+            /*  Verificamos que el mandante sea Propio, para proceder con nuestros Usuarios  */
+            if ($Mandante->propio == "S") {
+                /* Obtenemos la Transaccion de la BD para crear y registrar el Debito con esta transaccion */
+                $TransaccionJuegoMySqlDAO = new TransaccionJuegoMySqlDAO();
+                $Transaction = $TransaccionJuegoMySqlDAO->getTransaction();
+
+                /*  Verificamos que la Transaccion si este conectada y lista para usarse  */
+                if ($Transaction->isIsconnected()) {
+                    try {
+                        //syslog(10,'EZUGI-DEBIT5 ' .$transactionId . time());
+
+                    } catch (Exception $e) {
+                    }
+
+                    /* Validacion en Maquina */
+                    if ($UsuarioMandante->getUsumandanteId() == "1722" || $UsuarioMandante->getUsumandanteId() == "1796") {
+                        $ProveedorMaquina = new Proveedor("", "IES");
+                        /*  Consultamos de nuevo el usuario Token para obtener el RequestId actual para el WebSocket  */
+                        $UsuarioTokenMaquina = new UsuarioToken("", $ProveedorMaquina->getProveedorId(), $UsuarioMandante->getUsumandanteId());
+
+
+                        $data = array(
+                            "command" => "betshop-livecasino-bet",
+                            "sid" => $UsuarioTokenMaquina->getRequestId(),
+                            "params" => array(
+                                "externalId" => $roundId . $UsuarioMandante->getUsumandanteId() . "STI" . $betTypeID . $seatId,
+                                "amount" => $debitAmount,
+                                "currency" => "COP",
+                                "message" => "Apuesta en el juego ruleta",
+                                "playId" => "Ruleta123456",
+                                "nameGame" => "Ruleta"
+                            ),
+                            "rid" => "2018-01-23T18:53:04.139Z"
+                        );
+                        $WebsocketUsuario = new WebsocketUsuario($UsuarioTokenMaquina->getRequestId(), $data);
+
+
+                        $mensajeMaquina = $WebsocketUsuario->sendWSMessageWithReturn();
+
+                        /*  Creamos la Transaccion API Para verificar si hay antes hubo algun ROLLBACK antes */
+                        $TransaccionApiMaquina = new TransaccionApi();
+                        $TransaccionApiMaquina->setProveedorId($ProveedorMaquina->getProveedorId());
+                        $TransaccionApiMaquina->setProductoId(0);
+                        $TransaccionApiMaquina->setUsuarioId($UsuarioMandante->getUsumandanteId());
+                        $TransaccionApiMaquina->setTransaccionId($transactionId);
+                        $TransaccionApiMaquina->setIdentificador($roundId . $UsuarioMandante->getUsumandanteId() . "STI" . $betTypeID . $seatId);
+                        $TransaccionApiMaquina->setTipo("DEBITMACHINE");
+                        $TransaccionApiMaquina->setTValue(json_encode($data));
+                        $TransaccionApiMaquina->setUsucreaId(0);
+                        $TransaccionApiMaquina->setUsumodifId(0);
+                        $TransaccionApiMaquina->setRespuestaCodigo($mensajeMaquina);
+                        $TransaccionApiMaquina->setRespuesta(($mensajeMaquina));
+                        $TransaccionApiMaquina->setValor($debitAmount);
+
+                        $TransaccionApiMySqlDAO2 = new TransaccionApiMySqlDAO();
+                        $TransaccionApiMySqlDAO2->insert($TransaccionApiMaquina);
+                        $TransaccionApiMySqlDAO2->getTransaction()->commit();
+
+                        if ($mensajeMaquina == "ERROR") {
+                            throw new Exception("No se puede procesar.", "10041");
+                        }
+                    }
+
+
+                    /*  Verificamos si Existe el ticket para combinar las apuestas.  */
+                    if ($ExisteTicket) {
+                        /*  Obtenemos la Transaccion Juego y combinamos las aúestas.  */
+                        $TransaccionJuego = new TransaccionJuego("", $roundId . $UsuarioMandante->getUsumandanteId() . "STI" . $betTypeID . $seatId, "");
+                        if ($TransaccionJuego->getTransaccionId() != $transactionId) {
+                            $TransaccionJuego->setValorTicket($TransaccionJuego->getValorTicket() + $debitAmount);
+                            $TransaccionJuego->update($Transaction);
+                        }
+                        $transaccion_id = $TransaccionJuego->getTransjuegoId();
+                    } else {
+                        $transaccion_id = $TransaccionJuego->insert($Transaction);
+                    }
+
+
+                    try {
+                        //syslog(10,'EZUGI-DEBIT6 ' .$transactionId . time());
+
+                    } catch (Exception $e) {
+                    }
+
+                    /*  Obtenemos el tipo de Transaccion dependiendo de el betTypeID  */
+                    $tipoTransaccion = "";
+                    switch ($betTypeID) {
+                        case 1:
+                            $tipoTransaccion = "DEBIT";
+                            break;
+                        case 3:
+                            $tipoTransaccion = "DEBITTIP";
+                            break;
+                        case 4:
+                            $tipoTransaccion = "DEBITINSURANCE";
+                            break;
+                        case 5:
+                            $tipoTransaccion = "DEBITDOUBLE";
+                            break;
+                        case 6:
+                            $tipoTransaccion = "DEBITSPLIT";
+                            break;
+                        case 7:
+                            $tipoTransaccion = "DEBITANTE";
+                            break;
+                        case 16:
+                            $tipoTransaccion = "DEBITTABLE";
+                            break;
+                        case 17:
+                            $tipoTransaccion = "DEBITSPLITBB";
+                            break;
+                        case 18:
+                            $tipoTransaccion = "DEBITDOUBLEBB";
+                            break;
+                        case 19:
+                            $tipoTransaccion = "DEBITINSURANCEBB";
+                            break;
+                        case 24:
+                            $tipoTransaccion = "DEBITCALL";
+                            break;
+                    }
+                    try {
+                        //syslog(10,'EZUGI-DEBIT6-1 ' .$transactionId . time());
+
+                    } catch (Exception $e) {
+                    }
+                    /*  Creamos el log de la transaccion juego para auditoria  */
+                    $TransjuegoLog = new TransjuegoLog();
+                    $TransjuegoLog->setTransjuegoId($transaccion_id);
+                    //$TransjuegoLog->setTransaccionId($tipoTransaccion.$transaccion_id);
+                    $TransjuegoLog->setTransaccionId($transactionId);
+                    $TransjuegoLog->setTipo($tipoTransaccion);
+                    $TransjuegoLog->setTValue(json_encode($datos));
+                    $TransjuegoLog->setUsucreaId(0);
+                    $TransjuegoLog->setUsumodifId(0);
+                    $TransjuegoLog->setValor($debitAmount);
+
+                    $TransjuegoLog->setProductoId($ProductoMandante->prodmandanteId);
+                    $TransjuegoLog->setProveedorId($Producto->getSubproveedorId());
+
+                    try {
+                        //syslog(10,'EZUGI-DEBIT6-2 ' .$transactionId . time());
+
+                    } catch (Exception $e) {
+                    }
+                    $TransjuegoLog_id = $TransjuegoLog->insert($Transaction);
+
+                    try {
+                        //syslog(10,'EZUGI-DEBIT6-3 ' .$transactionId . time());
+
+                    } catch (Exception $e) {
+                    }
+                    /*  Obtenemos nuestro Usuario y hacemos el debito  */
+                    $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                    try {
+                        //syslog(10,'EZUGI-DEBIT6-4 ' .$transactionId . time());
+
+                    } catch (Exception $e) {
+                    }
+                    $UsuarioPerfil = new UsuarioPerfil($UsuarioMandante->usuarioMandante);
+
+                    try {
+                        //syslog(10,'EZUGI-DEBIT6-5 ' .$transactionId . time());
+
+                    } catch (Exception $e) {
+                    }
+                    if ($Usuario->estado != "A") {
+                        throw new Exception("Usuario Inactivo", "20003");
+                    }
+
+
+                    try {
+                        //syslog(10,'EZUGI-DEBIT7 ' .$transactionId . time());
+
+                    } catch (Exception $e) {
+                    }
+
+                    switch ($UsuarioPerfil->getPerfilId()) {
+                        case "USUONLINE":
+
+
+                            try {
+                                //syslog(10,'EZUGI-DEBIT7-1 ' .$transactionId . time());
+
+                            } catch (Exception $e) {
+                            }
+                            $Usuario->debit($debitAmount, $Transaction);
+
+
+                            $UsuarioHistorial = new UsuarioHistorial();
+                            $UsuarioHistorial->setUsuarioId($Usuario->usuarioId);
+                            $UsuarioHistorial->setDescripcion('');
+                            $UsuarioHistorial->setMovimiento('S');
+                            $UsuarioHistorial->setUsucreaId(0);
+                            $UsuarioHistorial->setUsumodifId(0);
+                            $UsuarioHistorial->setTipo(30);
+                            $UsuarioHistorial->setValor($debitAmount);
+                            $UsuarioHistorial->setExternoId($TransjuegoLog_id);
+
+                            $UsuarioHistorialMySqlDAO = new UsuarioHistorialMySqlDAO($Transaction);
+                            $UsuarioHistorialMySqlDAO->insert($UsuarioHistorial);
+
+                            try {
+                                //syslog(10,'EZUGI-DEBIT7-2 ' .$transactionId . time());
+
+                            } catch (Exception $e) {
+                            }
+
+                            break;
+
+                        case "MAQUINAANONIMA":
+
+
+                            /*  $PuntoVenta = new PuntoVenta("",$UsuarioMandante->usuarioMandante);
+
+                              $PuntoVenta->setBalanceCreditosBase(-$debitAmount,$Transaction);*/
+
+
+                            $Usuario->debit($debitAmount, $Transaction);
+
+
+                            $UsuarioHistorial = new UsuarioHistorial();
+                            $UsuarioHistorial->setUsuarioId($Usuario->usuarioId);
+                            $UsuarioHistorial->setDescripcion('');
+                            $UsuarioHistorial->setMovimiento('S');
+                            $UsuarioHistorial->setUsucreaId(0);
+                            $UsuarioHistorial->setUsumodifId(0);
+                            $UsuarioHistorial->setTipo(30);
+                            $UsuarioHistorial->setValor($debitAmount);
+                            $UsuarioHistorial->setExternoId($TransjuegoLog_id);
+
+                            $UsuarioHistorialMySqlDAO = new UsuarioHistorialMySqlDAO($Transaction);
+                            $UsuarioHistorialMySqlDAO->insert($UsuarioHistorial);
+
+                            break;
+                    }
+
+                    $diff = time() - $timeG;
+
+                    if ($diff > 5) {
+                        throw new Exception("No se puede procesar.", "10041");
+                    }
+
+
+                    $Transaction->commit();
+
+
+                    try {
+                        //syslog(10, 'EZUGI-DEBIT7-3 ' . $transactionId . time());
+
+                    } catch (Exception $e) {
+                    }
+
+                    /*  Consultamos de nuevo el usuario para obtener el saldo  */
+                    //$Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+                    //$UsuarioPerfil = new UsuarioPerfil($UsuarioMandante->usuarioMandante);
+                    $Balance = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                    /*switch ($UsuarioPerfil->getPerfilId()){
+                        case "USUONLINE":
+
+                            $Balance = $Usuario->getBalance();
+
+                            break;
+
+                        case "MAQUINAANONIMA":
+
+
+                            $Balance = $Usuario->getBalance();
+
+                            break;
+                    }
+
+                    if($UsuarioPerfil != ''){
+                        if($UsuarioPerfil->getPerfilId() == 'MAQUINAANONIMA'){
+                            $UsuarioToken = new UsuarioToken("", '0', $UsuarioMandante->getUsumandanteId());
+
+                            //  Enviamos el mensaje Websocket al Usuario para que actualice el saldo
+
+                            $UsuarioSession = new UsuarioSession();
+                            $rules = [];
+
+                            array_push($rules, array("field" => "usuario_session.estado", "data" => "A", "op" => "eq"));
+                            array_push($rules, array("field" => "usuario_session.usuario_id", "data" => $UsuarioMandante->getUsumandanteId(), "op" => "eq"));
+
+                            $filtro = array("rules" => $rules, "groupOp" => "AND");
+                            $json = json_encode($filtro);
+
+
+                            $usuarios = $UsuarioSession->getUsuariosCustom("usuario_session.*", "usuario_session.ususession_id", "asc", 0, 100, $json, true);
+
+                            $usuarios = json_decode($usuarios);
+
+                            $usuariosFinal = [];
+
+                            foreach ($usuarios->data as $key => $value) {
+                                $data = $UsuarioMandante->getWSProfileSite($value->{'usuario_session.request_id'});
+
+                                $WebsocketUsuario = new WebsocketUsuario($value->{'usuario_session.request_id'}, $data);
+                                $WebsocketUsuario->sendWSMessage();
+
+                            }
+                        }
+                    }*/
+
+
+                    try {
+                        //syslog(10, 'EZUGI-DEBIT8 ' . $transactionId . time());
+
+                    } catch (Exception $e) {
+                    }
+
+                    /*  Consultamos de nuevo el usuario Token para obtener el RequestId actual para el WebSocket  */
+                    /*$UsuarioToken = new UsuarioToken("",'0', $UsuarioMandante->getUsumandanteId());
+
+                    /*  Enviamos el mensaje Websocket al Usuario para que actualice el saldo
+                    $data = $Usuario->getWSMessage($UsuarioToken->getRequestId());
+                    $WebsocketUsuario = new WebsocketUsuario($UsuarioToken->getRequestId(), $data);
+                    $WebsocketUsuario->sendWSMessage();*/
+
+                    /*  Retornamos el mensaje satisfactorio  */
+                    $return = array(
+                        "operatorId" => $this->getOperadorId(),
+                        "uid" => $UsuarioMandante->usumandanteId,
+                        "token" => $this->token,
+                        "balance" => $Balance,
+                        "currency" => $currency,
+                        "roundId" => $roundId,
+                        "transactionId" => $transactionId,
+                        "errorCode" => 0,
+                        "errorDescription" => "ok",
+                        "timestamp" => (round(microtime(true) * 1000))
+                    );
+
+                    /*  Guardamos la Transaccion Api necesaria de estado OK   */
+                    $this->transaccionApi->setRespuestaCodigo("OK");
+                    $this->transaccionApi->setRespuesta(json_encode($return));
+                    $TransaccionApiMySqlDAO = new TransaccionApiMySqlDAO();
+                    $TransaccionApiMySqlDAO->insert($this->transaccionApi);
+                    $TransaccionApiMySqlDAO->getTransaction()->commit();
+
+                    // exec("php -f " . __DIR__ . "/VerificarTorneo.php LIVECASINO " . $this->transaccionApi->transapiId . " " . $UsuarioMandante->usuarioMandante . " > /dev/null &");
+
+
+                    try {
+                        $typeP = "CASINO";
+
+                        $Subproveedor = new Subproveedor($Producto->getSubproveedorId());
+
+                        if ($Subproveedor->getTipo() == 'CASINO') {
+                            $typeP = "CASINO";
+                        } elseif ($Subproveedor->getTipo() == 'LIVECASINO') {
+                            $typeP = "LIVECASINO";
+                        } elseif ($Subproveedor->getTipo() == 'VIRTUAL') {
+                            $typeP = "VIRTUALES";
+                        }
+
+
+                        if (true) {
+                            if (strpos(__DIR__, 'integrations/casino') != false) {
+
+                            } else {
+
+                            }
+                        }
+
+
+                        $ConfigurationEnvironment = new ConfigurationEnvironment();
+
+                        try {
+                            if ($ConfigurationEnvironment->isDevelopment() || $UsuarioMandante->usuarioMandante == 886 || $Usuario->test == 'S') {
+                                $CategoriaProducto = new CategoriaProducto("", $Producto->getProductoId(), $Subproveedor->getTipo());
+
+                                $Categoria = new Categoria ($CategoriaProducto->getCategoriaId());
+                                //exec("php -f " . __DIR__ . "/VerificarCashBack.php " . $UsuarioMandante->paisId . " " . $UsuarioMandante->usumandanteId . " " . $debitAmount . " " . 4 . " " . $ProductoMandante->prodmandanteId . " " . '0' . " '" . $Categoria->categoriaId . "' " . $Subproveedor->getSubproveedorId() . " " . $TransjuegoLog_id . " > /dev/null &");
+                            }
+                        } catch (Exception $e) {
+                        }
+                    } catch (Exception $e) {
+                    }
+
+
+                    try {
+                        //syslog(10,'EZUGI-DEBIT9 ' .$transactionId . time());
+
+                        //syslog(10,'EZUGI-DIFF-TIME ' .$transactionId ." ". $diff);
+                    } catch (Exception $e) {
+                    }
+
+                    return json_encode($return);
+                }
+            }
+        } catch (Exception $e) {
+            return $this->convertError($e->getCode(), $e->getMessage());
+        }
+    }
+
+    /**
+     * Realiza un rollback en el sistema.
+     *
+     * Este método procesa una transacción de rollback para un usuario en un juego específico.
+     * Valida los datos de entrada, verifica la existencia de la transacción original,
+     * actualiza el estado de la transacción y realiza el crédito correspondiente al usuario.
+     *
+     * @param string  $gameId         Identificador del juego.
+     * @param string  $uid            Identificador único del usuario.
+     * @param integer $betTypeID      Tipo de apuesta.
+     * @param string  $currency       Moneda utilizada en la transacción.
+     * @param float   $rollbackAmount Monto a revertir.
+     * @param string  $serverId       Identificador del servidor.
+     * @param string  $roundId        Identificador de la ronda.
+     * @param string  $transactionId  Identificador único de la transacción.
+     * @param string  $seatId         Identificador del asiento.
+     * @param string  $hash           Hash de seguridad para validar la transacción.
+     *
+     * @return string JSON con los detalles del rollback o un error.
+     * @throws Exception Si ocurre algún error durante el proceso.
+     */
+    public function Rollback($gameId, $uid, $betTypeID, $currency, $rollbackAmount, $serverId, $roundId, $transactionId, $seatId, $hash)
+    {
+        $datos = array(
+            "token" => $this->token,
+            "operatorId" => $this->operadorId,
+            "gameId" => $gameId,
+            "seatId" => $seatId,
+            "uid" => $uid,
+            "betTypeID" => $betTypeID,
+            "currency" => $currency,
+            "rollbackAmount" => $rollbackAmount,
+            "serverId" => $serverId,
+            "roundId" => $roundId,
+            "transactionId" => $transactionId,
+            "hash" => $hash
+
+        );
+        $this->data = $datos;
+        $betTypeID2 = $betTypeID;
+
+        switch ($betTypeID) {
+            case 101:
+                $betTypeID2 = 1;
+                break;
+            case 104:
+                $betTypeID2 = 4;
+                break;
+            case 105:
+                $betTypeID2 = 5;
+                break;
+            case 106:
+                $betTypeID2 = 6;
+                break;
+            case 107:
+                $betTypeID2 = 7;
+                break;
+            case 116:
+                $betTypeID2 = 16;
+                break;
+            case 117:
+                $betTypeID2 = 17;
+                break;
+            case 118:
+                $betTypeID2 = 18;
+                break;
+            case 119:
+                $betTypeID2 = 19;
+                break;
+            case 124:
+                $betTypeID2 = 24;
+                break;
+        }
+
+        try {
+            /*  Obtenemos el Proveedor con el abreviado EZZG */
+            $Proveedor = new Proveedor("", "EZZG");
+
+            /*  Creamos la Transaccion API  */
+            $this->transaccionApi = new TransaccionApi();
+            $this->transaccionApi->setTransaccionId('ROLLBACK' . $transactionId);
+            $this->transaccionApi->setTipo("ROLLBACK");
+            $this->transaccionApi->setProveedorId($Proveedor->getProveedorId());
+            $this->transaccionApi->setTValue(json_encode($datos));
+            $this->transaccionApi->setUsucreaId(0);
+            $this->transaccionApi->setUsumodifId(0);
+            $this->transaccionApi->setValor($rollbackAmount);
+
+            /*  Verificamos que el uid no sea vacio */
+            if ($uid == "" || ! is_numeric($uid)) {
+                throw new Exception("UID vacio", "10013");
+            }
+
+            /*  Obtenemos el Usuario Mandante con el UID */
+            $UsuarioMandante = new UsuarioMandante($uid);
+
+
+            /*  Obtenemos el Usuario Token con el token */
+            $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+            /*  Obtenemos el Usuario Mandante con el Usuario Token */
+            $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+            $this->transaccionApi->setIdentificador($roundId . $UsuarioMandante->getUsumandanteId() . "STI" . $betTypeID2 . $seatId);
+
+            /*  Obtenemos el producto con el gameId  */
+            $Producto = new Producto("", $gameId, $Proveedor->getProveedorId());
+
+            /*  Obtenemos el producto Mandante para saber si el mandante tiene habilitado el juego  */
+            $ProductoMandante = new ProductoMandante($Producto->getProductoId(), $UsuarioMandante->getMandante());
+
+            /*  Agregamos Elementos a la Transaccion API  */
+            $this->transaccionApi->setProductoId($ProductoMandante->prodmandanteId);
+            $this->transaccionApi->setUsuarioId($UsuarioMandante->getUsumandanteId());
+
+
+            /*  Verificamos que la transaccionId no se haya procesado antes  */
+            if ($this->transaccionApi->existsTransaccionIdAndProveedor("OK")) {
+                /*  Si la transaccionId ha sido procesada, reportamos el error  */
+                throw new Exception("Transaccion ya procesada", "10001");
+            }
+
+
+            try {
+                $TransaccionApi2 = new TransaccionApi("", $transactionId, $Proveedor->getProveedorId());
+                $jsonValue = json_decode($TransaccionApi2->getTValue());
+
+                $valorTransaction = 0;
+                if (strpos($TransaccionApi2->getTipo(), 'DEBIT') !== false) {
+                    $valorTransaction = $jsonValue->debitAmount;
+                    $valorTransaction = $TransaccionApi2->valor;
+                } else {
+                    throw new Exception("Transaccion no es Debit", "10006");
+                }
+            } catch (Exception $e) {
+                throw new Exception("Transaccion no existe", "10005");
+            }
+
+            $seatIdSecond = $jsonValue->seatId;
+            $betTypeIDSecond = $jsonValue->betTypeID;
+            if ($betTypeIDSecond == '6') {
+                if (strpos($seatId, '-') === false) {
+                    $seatIdSecond = $seatIdSecond . '-2';
+                }
+            }
+
+
+            /*  Creamos la Transaccion por el Juego  */
+            $TransaccionJuego = new TransaccionJuego("", $TransaccionApi2->getIdentificador());
+
+            /*  Verificamos que el valor del ticket sea igual al valor del Rollback  */
+            if ($valorTransaction != $rollbackAmount) {
+                throw new Exception("Valor ticket diferente al Rollback", "10003");
+            }
+
+            /*  Obtenemos Mandante para verificar sus caracteristicas  */
+            $Mandante = new Mandante($UsuarioMandante->mandante);
+
+            /*  Verificamos si el mandante es Propio  */
+            if ($Mandante->propio == "S") {
+                /* Obtenemos la Transaccion de la BD para crear y registrar el Debito con esta transaccion */
+                $TransaccionJuegoMySqlDAO = new TransaccionJuegoMySqlDAO();
+                $Transaction = $TransaccionJuegoMySqlDAO->getTransaction();
+
+                /*  Verificamos que la Transaccion si este conectada y lista para usarse  */
+                if ($Transaction->isIsconnected()) {
+                    /*  Actualizamos Transaccion Juego  */
+                    $TransaccionJuego->setEstado("I");
+                    $TransaccionJuego->setValorPremio($rollbackAmount);
+                    $TransaccionJuego->update($Transaction);
+
+
+                    /*  Obtenemos el Transaccion Juego ID  */
+                    $TransJuegoId = $TransaccionJuego->getTransjuegoId();
+
+                    /*  Creamos el Log de Transaccion Juego  */
+                    $TransjuegoLog = new TransjuegoLog();
+                    $TransjuegoLog->setTransjuegoId($TransJuegoId);
+                    $TransjuegoLog->setTransaccionId("ROLLBACK" . $transactionId);
+                    $TransjuegoLog->setTipo("ROLLBACK");
+                    $TransjuegoLog->setTValue(json_encode($datos));
+                    $TransjuegoLog->setUsucreaId(0);
+                    $TransjuegoLog->setUsumodifId(0);
+                    $TransjuegoLog->setValor($rollbackAmount);
+
+                    $TransjuegoLog->setProductoId($ProductoMandante->prodmandanteId);
+                    $TransjuegoLog->setProveedorId($Producto->getSubproveedorId());
+
+                    $TransjuegoLog_id = $TransjuegoLog->insert($Transaction);
+
+                    /*  Obtenemos el Usuario para hacerle el credito  */
+                    $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+                    $Usuario->credit($TransaccionJuego->getValorTicket(), $Transaction);
+
+
+                    $UsuarioHistorial = new UsuarioHistorial();
+                    $UsuarioHistorial->setUsuarioId($Usuario->usuarioId);
+                    $UsuarioHistorial->setDescripcion('');
+                    $UsuarioHistorial->setMovimiento('C');
+                    $UsuarioHistorial->setUsucreaId(0);
+                    $UsuarioHistorial->setUsumodifId(0);
+                    $UsuarioHistorial->setTipo(30);
+                    $UsuarioHistorial->setValor($TransaccionJuego->getValorTicket());
+                    $UsuarioHistorial->setExternoId($TransjuegoLog_id);
+
+                    $UsuarioHistorialMySqlDAO = new UsuarioHistorialMySqlDAO($Transaction);
+                    $UsuarioHistorialMySqlDAO->insert($UsuarioHistorial);
+
+
+                    $Transaction->commit();
+
+                    $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+                    $UsuarioPerfil = new UsuarioPerfil($UsuarioMandante->usuarioMandante);
+
+                    switch ($UsuarioPerfil->getPerfilId()) {
+                        case "USUONLINE":
+
+                            $Balance = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                            break;
+
+                        case "MAQUINAANONIMA":
+
+
+                            /*$PuntoVenta = new PuntoVenta("",$UsuarioMandante->usuarioMandante);
+
+                            $SaldoRecargas = $PuntoVenta->getCupoRecarga();
+                            $SaldoJuego = $PuntoVenta->getCreditosBase();
+
+                            $Balance = $SaldoJuego;*/
+
+                            $Balance = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                            break;
+                    }
+                    $return = array(
+
+                        "operatorId" => $this->getOperadorId(),
+                        "uid" => $UsuarioMandante->usumandanteId,
+                        "roundId" => $roundId,
+                        "token" => $this->token,
+                        "balance" => $Balance,
+                        "currency" => $currency,
+                        "transactionId" => $transactionId,
+                        "errorCode" => 0,
+                        "errorDescription" => "ok",
+                        "timestamp" => (round(microtime(true) * 1000))
+                    );
+
+                    /*  Guardamos la Transaccion Api necesaria de estado OK   */
+                    $this->transaccionApi->setRespuestaCodigo("OK");
+                    $this->transaccionApi->setRespuesta(json_encode($return));
+                    $TransaccionApiMySqlDAO = new TransaccionApiMySqlDAO();
+                    $TransaccionApiMySqlDAO->insert($this->transaccionApi);
+                    $TransaccionApiMySqlDAO->getTransaction()->commit();
+
+                    return json_encode($return);
+                }
+            }
+        } catch (Exception $e) {
+            return $this->convertError($e->getCode(), $e->getMessage());
+        }
+    }
+
+    /**
+     * Procesa una transacción de crédito en el sistema.
+     *
+     * Este método realiza un crédito para un usuario en un juego específico.
+     * Valida los datos de entrada, verifica la existencia de la transacción de débito asociada,
+     * actualiza el estado de la transacción y realiza el crédito correspondiente al usuario.
+     *
+     * @param string  $gameId             Identificador del juego.
+     * @param string  $uid                Identificador único del usuario.
+     * @param integer $betTypeID          Tipo de apuesta.
+     * @param string  $currency           Moneda utilizada en la transacción.
+     * @param float   $creditAmount       Monto a acreditar.
+     * @param string  $serverId           Identificador del servidor.
+     * @param string  $roundId            Identificador de la ronda.
+     * @param string  $transactionId      Identificador único de la transacción.
+     * @param string  $seatId             Identificador del asiento.
+     * @param string  $gameDataString     Datos adicionales del juego.
+     * @param boolean $isEndRound         Indica si la ronda ha finalizado.
+     * @param integer $creditIndex        Índice del crédito.
+     * @param string  $hash               Hash de seguridad para validar la transacción.
+     * @param string  $debitTransactionId Identificador de la transacción de débito asociada.
+     *
+     * @return string JSON con los detalles del crédito o un error.
+     * @throws Exception Si ocurre algún error durante el proceso.
+     */
+    public function Credit($gameId, $uid, $betTypeID, $currency, $creditAmount, $serverId, $roundId, $transactionId, $seatId, $gameDataString, $isEndRound, $creditIndex, $hash, $debitTransactionId = '')
+    {
+        $datos = array(
+            "token" => $this->token,
+            "operatorId" => $this->operadorId,
+            "gameId" => $gameId,
+            "seatId" => $seatId,
+            "uid" => $uid,
+            "betTypeID" => $betTypeID,
+            "currency" => $currency,
+            "creditAmount" => $creditAmount,
+            "serverId" => $serverId,
+            "roundId" => $roundId,
+            "transactionId" => $transactionId,
+            "gameDataString" => $gameDataString,
+            "isEndRound" => $isEndRound,
+            "creditIndex" => $creditIndex,
+            "hash" => $hash
+
+        );
+
+        $this->data = $datos;
+
+
+        switch ($betTypeID) {
+            case 101:
+                $betTypeID2 = 1;
+                break;
+            case 104:
+                $betTypeID2 = 4;
+                break;
+            case 105:
+                $betTypeID2 = 5;
+                break;
+            case 106:
+                $betTypeID2 = 6;
+                break;
+            case 107:
+                $betTypeID2 = 7;
+                break;
+            case 116:
+                $betTypeID2 = 16;
+                break;
+            case 117:
+                $betTypeID2 = 17;
+                break;
+            case 118:
+                $betTypeID2 = 18;
+                break;
+            case 119:
+                $betTypeID2 = 19;
+                break;
+            case 124:
+                $betTypeID2 = 24;
+                break;
+        }
+
+
+        try {
+            /*  Obtenemos el Proveedor con el abreviado EZZG */
+            $Proveedor = new Proveedor("", "EZZG");
+
+            /*  Creamos la Transaccion API  */
+            $this->transaccionApi = new TransaccionApi();
+            $this->transaccionApi->setTransaccionId($transactionId);
+            $this->transaccionApi->setTipo("CREDIT");
+            $this->transaccionApi->setProveedorId($Proveedor->getProveedorId());
+            $this->transaccionApi->setTValue(json_encode($datos));
+            $this->transaccionApi->setUsucreaId(0);
+            $this->transaccionApi->setUsumodifId(0);
+            $this->transaccionApi->setValor($creditAmount);
+
+            /*  Verificamos que el uid no sea vacio */
+            if ($uid == "" || ! is_numeric($uid)) {
+                throw new Exception("UID vacio", "10013");
+            }
+            if ($debitTransactionId == "") {
+                throw new Exception("debitTransactionId vacio", "50030");
+            } else {
+                try {
+                    $TransaccionApi2 = new TransaccionApi("", $debitTransactionId, $Proveedor->getProveedorId());
+                    if (strpos($TransaccionApi2->getTipo(), 'DEBIT') !== false) {
+                    } else {
+                        throw new Exception("Transaccion no es Debit", "50030");
+                    }
+                } catch (Exception $e) {
+                    throw new Exception("Transaccion no existe", "50030");
+                }
+            }
+
+            /*  Obtenemos el Usuario Mandante con el UID */
+            $UsuarioMandante = new UsuarioMandante($uid);
+
+            /*  Obtenemos el Usuario Token con el token */
+            $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+            /*  Obtenemos el Usuario Mandante con el Usuario Token */
+            $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+            $this->transaccionApi->setIdentificador($roundId . $UsuarioMandante->getUsumandanteId() . "STI" . $betTypeID2 . $seatId);
+
+
+            if ( ! in_array($betTypeID, array(101, 104, 105, 106, 107, 116, 117, 118, 119, 124, 127))) {
+                $return = array(
+                    "operatorId" => $this->getOperadorId(),
+                    "uid" => $UsuarioMandante->usumandanteId,
+                    "token" => $this->token,
+                    "balance" => 0,
+                    "currency" => $currency,
+                    "roundId" => $roundId,
+                    "errorCode" => 1,
+                    "errorDescription" => "General Error",
+                    "timestamp" => (round(microtime(true) * 1000))
+                );
+                return (json_encode($return));
+            }
+
+            /*  Obtenemos el producto con el gameId  */
+            $Producto = new Producto("", $gameId, $Proveedor->getProveedorId());
+
+            /*  Obtenemos el producto Mandante para saber si el mandante tiene habilitado el juego  */
+            $ProductoMandante = new ProductoMandante($Producto->getProductoId(), $UsuarioMandante->getMandante());
+
+            /*  Agregamos Elementos a la Transaccion API  */
+            $this->transaccionApi->setProductoId($ProductoMandante->prodmandanteId);
+            $this->transaccionApi->setUsuarioId($UsuarioMandante->getUsumandanteId());
+
+
+            /*  Verificamos que la transaccionId no se haya procesado antes  */
+            if ($this->transaccionApi->existsTransaccionIdAndProveedor("OK")) {
+                /*  Si la transaccionId ha sido procesada, reportamos el error  */
+                throw new Exception("Transaccion ya procesada", "10001");
+            }
+
+            /* Verificamos si llega un SEATID SPLIT sin TransaccionJuego */
+            if (strpos($seatId, '-') !== false) {
+                try {
+                    /*  Obtenemos la Transaccion Juego   */
+                    $TransaccionJuego = new TransaccionJuego("", $roundId . $UsuarioMandante->getUsumandanteId() . "STI" . $betTypeID2 . $seatId);
+                } catch (Exception $e) {
+                    if ($e->getCode() == "28") {
+                        /*  Creamos la Transaccion por el Juego  */
+                        $TransaccionJuego = new TransaccionJuego();
+                        $TransaccionJuego->setProductoId($ProductoMandante->prodmandanteId);
+                        $TransaccionJuego->setTransaccionId($transactionId);
+                        $TransaccionJuego->setTicketId($roundId . $UsuarioMandante->getUsumandanteId() . "STI" . $betTypeID2 . $seatId);
+                        $TransaccionJuego->setValorTicket(0);
+                        $TransaccionJuego->setValorPremio(0);
+                        $TransaccionJuego->setMandante($UsuarioMandante->mandante);
+                        $TransaccionJuego->setUsuarioId($UsuarioMandante->usumandanteId);
+                        $TransaccionJuego->setEstado("A");
+                        $TransaccionJuego->setUsucreaId(0);
+                        $TransaccionJuego->setUsumodifId(0);
+
+                        /* Obtenemos la Transaccion de la BD para crear y registrar el Debito con esta transaccion */
+                        $TransaccionJuegoMySqlDAO = new TransaccionJuegoMySqlDAO();
+                        $TransactionTemp = $TransaccionJuegoMySqlDAO->getTransaction();
+
+                        $transaccion_id = $TransaccionJuego->insert($TransactionTemp);
+
+                        /*  Creamos el log de la transaccion juego para auditoria  */
+                        $TransjuegoLog = new TransjuegoLog();
+                        $TransjuegoLog->setTransjuegoId($transaccion_id);
+                        $TransjuegoLog->setTransaccionId("DEBAUTO" . $transactionId);
+                        $TransjuegoLog->setTipo("DEBIT");
+                        $TransjuegoLog->setTValue('');
+                        $TransjuegoLog->setUsucreaId(0);
+                        $TransjuegoLog->setUsumodifId(0);
+                        $TransjuegoLog->setValor(0);
+
+                        $TransjuegoLog->setProductoId($ProductoMandante->prodmandanteId);
+                        $TransjuegoLog->setProveedorId($Producto->getSubproveedorId());
+
+                        $TransjuegoLog_id = $TransjuegoLog->insert($TransactionTemp);
+
+                        $TransactionTemp->commit();
+                    }
+                }
+            }
+
+            /*  Obtenemos la Transaccion Juego   */
+            $TransaccionJuego = new TransaccionJuego("", $roundId . $UsuarioMandante->getUsumandanteId() . "STI" . $betTypeID2 . $seatId);
+
+            /*  Obtenemos el mandante para verificar sus caracteristicas  */
+            $Mandante = new Mandante($UsuarioMandante->mandante);
+
+
+            /*  Verificamos si el mandante es propio  */
+            if ($Mandante->propio == "S") {
+                /* Obtenemos la Transaccion de la BD para crear y registrar el Debito con esta transaccion */
+                $TransaccionJuegoMySqlDAO = new TransaccionJuegoMySqlDAO();
+                $Transaction = $TransaccionJuegoMySqlDAO->getTransaction();
+
+                /*  Verificamos que la Transaccion si este conectada y lista para usarse  */
+                if ($Transaction->isIsconnected()) {
+                    /* Validacion en Maquina */
+                    if ($UsuarioMandante->getUsumandanteId() == "1722" || $UsuarioMandante->getUsumandanteId() == "1796") {
+                        $ProveedorMaquina = new Proveedor("", "IES");
+                        /*  Consultamos de nuevo el usuario Token para obtener el RequestId actual para el WebSocket  */
+                        $UsuarioTokenMaquina = new UsuarioToken("", $ProveedorMaquina->getProveedorId(), $UsuarioMandante->getUsumandanteId());
+
+
+                        $data = array(
+                            "command" => "betshop-livecasino-win",
+                            "sid" => $UsuarioTokenMaquina->getRequestId(),
+                            "params" => array(
+                                "externalId" => $roundId . $UsuarioMandante->getUsumandanteId() . "STI" . $betTypeID . $seatId,
+                                "amount" => $creditAmount,
+                                "currency" => "COP",
+                                "message" => "Apuesta en el juego ruleta",
+                                "playId" => "Ruleta123456",
+                                "nameGame" => "Ruleta"
+                            ),
+                            "rid" => "2018-01-23T18:53:04.139Z"
+                        );
+
+                        $WebsocketUsuario = new WebsocketUsuario($UsuarioTokenMaquina->getRequestId(), $data);
+                        $mensajeMaquina = $WebsocketUsuario->sendWSMessageWithReturn();
+
+                        /*  Creamos la Transaccion API Para verificar si hay antes hubo algun ROLLBACK antes */
+                        $TransaccionApiMaquina = new TransaccionApi();
+                        $TransaccionApiMaquina->setProveedorId($ProveedorMaquina->getProveedorId());
+                        $TransaccionApiMaquina->setProductoId(0);
+                        $TransaccionApiMaquina->setUsuarioId($UsuarioMandante->getUsumandanteId());
+                        $TransaccionApiMaquina->setTransaccionId($transactionId);
+                        $TransaccionApiMaquina->setIdentificador($roundId . $UsuarioMandante->getUsumandanteId() . "STI" . $betTypeID . $seatId);
+                        $TransaccionApiMaquina->setTipo("CREDITMACHINE");
+                        $TransaccionApiMaquina->setTValue(json_encode($data));
+                        $TransaccionApiMaquina->setUsucreaId(0);
+                        $TransaccionApiMaquina->setUsumodifId(0);
+                        $TransaccionApiMaquina->setRespuestaCodigo($mensajeMaquina);
+                        $TransaccionApiMaquina->setRespuesta(json_encode($mensajeMaquina));
+                        $TransaccionApiMaquina->setValor($creditAmount);
+
+                        $TransaccionApiMySqlDAO2 = new TransaccionApiMySqlDAO();
+                        $TransaccionApiMySqlDAO2->insert($TransaccionApiMaquina);
+                        $TransaccionApiMySqlDAO2->getTransaction()->commit();
+
+                        if ($mensajeMaquina == "ERROR") {
+                            throw new Exception("No se puede procesar.", "10041");
+                        }
+                    }
+
+
+                    /*  Obtenemos el ID de la TransaccionJuego  */
+                    $TransJuegoId = $TransaccionJuego->getTransjuegoId();
+
+                    /*  Obtenemos el tipo de transacción dependiendo a betTypeID y si se le suma los creditos o no */
+                    $sumaCreditos = false;
+                    $tipoTransaccion = "";
+
+                    switch ($betTypeID) {
+                        case 101:
+                            $tipoTransaccion = "CREDIT";
+                            $sumaCreditos = true;
+                            break;
+                        case 104:
+                            $tipoTransaccion = "CREDITINSURANCE";
+                            $sumaCreditos = true;
+                            break;
+                        case 105:
+                            $tipoTransaccion = "CREDITDOUBLE";
+                            $sumaCreditos = false;
+                            break;
+                        case 106:
+                            $tipoTransaccion = "CREDITSPLIT";
+                            $sumaCreditos = true;
+                            break;
+                        case 107:
+                            $tipoTransaccion = "CREDITANTE";
+                            $sumaCreditos = false;
+                            break;
+                        case 116:
+                            $tipoTransaccion = "CREDITTABLE";
+                            $sumaCreditos = true;
+                            break;
+                        case 117:
+                            $tipoTransaccion = "CREDITSPLITBB";
+                            $sumaCreditos = true;
+                            break;
+                        case 118:
+                            $tipoTransaccion = "CREDITDOUBLEBB";
+                            $sumaCreditos = true;
+                            break;
+                        case 119:
+                            $tipoTransaccion = "CREDITINSURANCEBB";
+                            $sumaCreditos = true;
+                            break;
+                        case 124:
+                            $tipoTransaccion = "CREDITCALL";
+                            $sumaCreditos = true;
+                            break;
+                    }
+
+                    /*  Creamos el respectivo Log de la transaccion Juego  */
+                    $TransjuegoLog = new TransjuegoLog();
+                    $TransjuegoLog->setTransjuegoId($TransJuegoId);
+                    $TransjuegoLog->setTransaccionId($transactionId);
+                    $TransjuegoLog->setTipo($tipoTransaccion);
+                    $TransjuegoLog->setTValue(json_encode($datos));
+                    $TransjuegoLog->setUsucreaId(0);
+                    $TransjuegoLog->setUsumodifId(0);
+                    $TransjuegoLog->setValor($creditAmount);
+
+                    $TransjuegoLog->setProductoId($ProductoMandante->prodmandanteId);
+                    $TransjuegoLog->setProveedorId($Producto->getSubproveedorId());
+
+                    $TransjuegoLog_id = $TransjuegoLog->insert($Transaction);
+
+                    if ( ! $TransjuegoLog->isEqualsNewCredit()) {
+                        /*  Si el numero de creditos es mayor al de los debitos sacamos error  */
+                        throw new Exception("CREDIT MAYOR A DEBIT", "10014");
+                    }
+
+                    /*  Actualizamos la Transaccion Juego con los respectivas actualizaciones  */
+                    $TransaccionJuego->setValorPremio($TransaccionJuego->getValorPremio() + $creditAmount);
+                    if ($isEndRound) {
+                        if ($TransaccionJuego->getValorPremio() > 0) {
+                            $TransaccionJuego->setPremiado("S");
+                            $TransaccionJuego->setFechaPago((date('Y-m-d H:i:s')));
+                        }
+                        $TransaccionJuego->setEstado("I");
+                    }
+                    $TransaccionJuego->update($Transaction);
+
+                    /*  Si suma los creditos, hacemos el respectivo CREDIT  */
+                    if ($sumaCreditos) {
+                        if ($creditAmount > 0) {
+                            $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+                            $UsuarioPerfil = new UsuarioPerfil($UsuarioMandante->usuarioMandante);
+
+
+                            switch ($UsuarioPerfil->getPerfilId()) {
+                                case "USUONLINE":
+
+
+                                    $Usuario->creditWin($creditAmount, $Transaction);
+
+
+                                    $UsuarioHistorial = new UsuarioHistorial();
+                                    $UsuarioHistorial->setUsuarioId($Usuario->usuarioId);
+                                    $UsuarioHistorial->setDescripcion('');
+                                    $UsuarioHistorial->setMovimiento('E');
+                                    $UsuarioHistorial->setUsucreaId(0);
+                                    $UsuarioHistorial->setUsumodifId(0);
+                                    $UsuarioHistorial->setTipo(30);
+                                    $UsuarioHistorial->setValor($creditAmount);
+                                    $UsuarioHistorial->setExternoId($TransjuegoLog_id);
+
+                                    $UsuarioHistorialMySqlDAO = new UsuarioHistorialMySqlDAO($Transaction);
+                                    $UsuarioHistorialMySqlDAO->insert($UsuarioHistorial);
+
+
+                                    break;
+
+                                case "MAQUINAANONIMA":
+
+
+                                    /*$PuntoVenta = new PuntoVenta("",$UsuarioMandante->usuarioMandante);
+
+                                    $PuntoVenta->setBalanceCreditosBase($creditAmount,$Transaction);*/
+
+
+                                    $Usuario->creditWin($creditAmount, $Transaction);
+
+
+                                    $UsuarioHistorial = new UsuarioHistorial();
+                                    $UsuarioHistorial->setUsuarioId($Usuario->usuarioId);
+                                    $UsuarioHistorial->setDescripcion('');
+                                    $UsuarioHistorial->setMovimiento('E');
+                                    $UsuarioHistorial->setUsucreaId(0);
+                                    $UsuarioHistorial->setUsumodifId(0);
+                                    $UsuarioHistorial->setTipo(30);
+                                    $UsuarioHistorial->setValor($creditAmount);
+                                    $UsuarioHistorial->setExternoId($TransjuegoLog_id);
+
+                                    $UsuarioHistorialMySqlDAO = new UsuarioHistorialMySqlDAO($Transaction);
+                                    $UsuarioHistorialMySqlDAO->insert($UsuarioHistorial);
+
+                                    break;
+                            }
+                        }
+                    }
+
+
+                    $Transaction->commit();
+
+                    /*  Consultamos de nuevo el usuario para obtener el saldo  */
+                    $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+                    $UsuarioPerfil = new UsuarioPerfil($UsuarioMandante->usuarioMandante);
+
+                    switch ($UsuarioPerfil->getPerfilId()) {
+                        case "USUONLINE":
+
+                            $Balance = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                            break;
+
+                        case "MAQUINAANONIMA":
+
+
+                            /*$PuntoVenta = new PuntoVenta("",$UsuarioMandante->usuarioMandante);
+
+                            $SaldoRecargas = $PuntoVenta->getCupoRecarga();
+                            $SaldoJuego = $PuntoVenta->getCreditosBase();
+
+                            $Balance = $SaldoJuego;*/
+
+
+                            $Balance = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                            break;
+                    }
+
+
+                    if ($UsuarioPerfil != '') {
+                        if ($UsuarioPerfil->getPerfilId() == 'MAQUINAANONIMA') {
+                            $UsuarioToken = new UsuarioToken("", '0', $UsuarioMandante->getUsumandanteId());
+
+                            //  Enviamos el mensaje Websocket al Usuario para que actualice el saldo
+
+                            $UsuarioSession = new UsuarioSession();
+                            $rules = [];
+
+                            array_push($rules, array("field" => "usuario_session.estado", "data" => "A", "op" => "eq"));
+                            array_push($rules, array("field" => "usuario_session.usuario_id", "data" => $UsuarioMandante->getUsumandanteId(), "op" => "eq"));
+
+                            $filtro = array("rules" => $rules, "groupOp" => "AND");
+                            $json = json_encode($filtro);
+
+
+                            $usuarios = $UsuarioSession->getUsuariosCustom("usuario_session.*", "usuario_session.ususession_id", "asc", 0, 100, $json, true);
+
+                            $usuarios = json_decode($usuarios);
+
+                            $usuariosFinal = [];
+
+                            foreach ($usuarios->data as $key => $value) {
+                                $data = $UsuarioMandante->getWSProfileSite($value->{'usuario_session.request_id'});
+
+                                $WebsocketUsuario = new WebsocketUsuario($value->{'usuario_session.request_id'}, $data);
+                                $WebsocketUsuario->sendWSMessage();
+                            }
+                        }
+                    }
+
+                    /*  Consultamos de nuevo el usuario Token para obtener el RequestId actual para el WebSocket  */
+                    /*$UsuarioToken = new UsuarioToken("",'0', $UsuarioMandante->getUsumandanteId());
+
+                    /*  Enviamos el mensaje Websocket al Usuario para que actualice el saldo
+                    $data = $Usuario->getWSMessage($UsuarioToken->getRequestId());
+                    $WebsocketUsuario = new WebsocketUsuario($UsuarioToken->getRequestId(), $data);
+                    $WebsocketUsuario->sendWSMessage();*/
+
+                    /*  Retornamos el mensaje satisfactorio  */
+
+                    $return = array(
+
+                        "operatorId" => $this->getOperadorId(),
+                        "uid" => $UsuarioMandante->usumandanteId,
+                        "roundId" => $roundId,
+                        "token" => $this->token,
+                        "balance" => $Balance,
+                        "currency" => $currency,
+                        "transactionId" => $transactionId,
+                        "errorCode" => 0,
+                        "errorDescription" => "ok",
+                        "timestamp" => (round(microtime(true) * 1000))
+                    );
+
+                    /*  Guardamos la Transaccion Api necesaria de estado OK   */
+                    $this->transaccionApi->setRespuestaCodigo("OK");
+                    $this->transaccionApi->setRespuesta(json_encode($return));
+                    $TransaccionApiMySqlDAO = new TransaccionApiMySqlDAO();
+                    $TransaccionApiMySqlDAO->insert($this->transaccionApi);
+                    $TransaccionApiMySqlDAO->getTransaction()->commit();
+
+
+                    if ($sumaCreditos) {
+                        exec("php -f " . __DIR__ . "/VerificarTorneoPremio.php LIVECASINO " . $this->transaccionApi->transapiId . " " . $UsuarioMandante->usuarioMandante . " > /dev/null &");
+                    }
+
+
+                    return json_encode($return);
+                }
+            }
+        } catch (Exception $e) {
+            return $this->convertError($e->getCode(), $e->getMessage());
+        }
+    }
+
+    /**
+     * Handles error conversion and generates a response based on the provided error code and message.
+     *
+     * @param integer $code    The error code to process.
+     * @param string  $message The error message to process.
+     *
+     * @return string A JSON-encoded response containing error details and additional information.
+     */
+    public function convertError($code, $message)
+    {
+        $codeProveedor = "";
+        $messageProveedor = "";
+
+        if ($this->uid != '') {
+            $response = array(
+
+                "operatorId" => $this->getOperadorId(),
+                "uid" => $this->uid,
+                "token" => $this->token,
+                "timestamp" => (round(microtime(true) * 1000))
+            );
+        } else {
+            if ($code != 10030) {
+                $response = array(
+
+                    "operatorId" => $this->getOperadorId(),
+                    "token" => $this->token,
+                    "timestamp" => (round(microtime(true) * 1000))
+                );
+            } else {
+                $response = array(
+
+                    "operatorId" => $this->getOperadorId(),
+                    "timestamp" => (round(microtime(true) * 1000))
+                );
+            }
+        }
+        $tipo = $this->transaccionApi->getTipo();
+
+        if ($tipo == "DEBIT" || $tipo == "CREDIT" || $tipo == "ROLLBACK") {
+            $response = array_merge($response, array(
+                'transactionId' => $this->data['transactionId'],
+                'roundId' => $this->data['roundId']
+            ));
+        } else {
+            $response = array_merge($response, array(
+                'VIP' => '0'
+            ));
+        }
+        $Proveedor = new Proveedor("", "EZZG");
+
+        switch ($code) {
+            case 10002:
+                $codeProveedor = 1;
+                $messageProveedor = "Negative amount";
+
+                if ($this->token != '') {
+                    $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                    $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                    $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                    if ($Mandante->propio == "S") {
+                        $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                        $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                        $response = array_merge($response, array(
+                            "balance" => $saldo,
+                            "currency" => $UsuarioMandante->getMoneda()
+                        ));
+                    }
+                }
+
+                break;
+            case 10003:
+                $codeProveedor = 1;
+                $messageProveedor = "Invalid Amount";
+
+                if ($this->token != '') {
+                    $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                    $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                    $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                    if ($Mandante->propio == "S") {
+                        $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                        $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                        $response = array_merge($response, array(
+                            "balance" => $saldo,
+                            "currency" => $UsuarioMandante->getMoneda()
+                        ));
+                    }
+                }
+                break;
+
+            case 10011:
+                $codeProveedor = 6;
+                $messageProveedor = "Token not found";
+                break;
+            case 21:
+                $codeProveedor = 6;
+                $messageProveedor = "Token not found";
+
+                $response = array_merge($response, array(
+                    "balance" => 0,
+                    "currency" => ''
+                ));
+
+                if ($this->uid != '') {
+                    try {
+                        $UsuarioMandante = new UsuarioMandante($this->uid);
+                        $response = array_merge($response, array(
+                            "currency" => $UsuarioMandante->getMoneda()
+                        ));
+                    } catch (Exception $e) {
+                    }
+                }
+
+                break;
+            case 10030:
+                $codeProveedor = 6;
+                $messageProveedor = "Token not found";
+
+                $response = array_merge($response, array(
+                    "balance" => 0
+                ));
+
+                break;
+            case 10013:
+                $codeProveedor = 7;
+                $messageProveedor = "User not found";
+
+                $response = array_merge($response, array(
+                    "balance" => 0,
+                    "currency" => ''
+                ));
+
+                try {
+                    if ($this->uid != '' && is_numeric($this->uid)) {
+                        try {
+                            $UsuarioMandante = new UsuarioMandante($this->uid);
+                            $response = array_merge($response, array(
+                                "currency" => $UsuarioMandante->getMoneda()
+                            ));
+                        } catch (Exception $e) {
+                        }
+                    } elseif ($this->token != '') {
+                        $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                        $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                        $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                        if ($Mandante->propio == "S") {
+                            $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                            $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                            $response = array_merge($response, array(
+                                "currency" => $UsuarioMandante->getMoneda()
+                            ));
+                        }
+                    }
+                } catch (Exception $e) {
+                }
+
+                break;
+            case 10005:
+                $codeProveedor = 9;
+                $messageProveedor = "Transaction not found";
+
+                try {
+                    if ($this->token != '') {
+                        $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                        $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                        $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                        if ($Mandante->propio == "S") {
+                            $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                            $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                            $response = array_merge($response, array(
+                                "balance" => $saldo,
+                                "currency" => $UsuarioMandante->getMoneda()
+                            ));
+                        }
+                    }
+                } catch (Exception $e) {
+                }
+                break;
+            case 22:
+                $codeProveedor = 7;
+                $messageProveedor = "User not found";
+
+                $response = array_merge($response, array(
+                    "balance" => 0,
+                    "currency" => ''
+                ));
+
+                if ($this->uid != '') {
+                    try {
+                        $UsuarioMandante = new UsuarioMandante($this->uid);
+                        $response = array_merge($response, array(
+                            "currency" => $UsuarioMandante->getMoneda()
+                        ));
+                    } catch (Exception $e) {
+                    }
+                }
+                break;
+            case 50030:
+                $codeProveedor = 9;
+                $messageProveedor = "Corresponding debit transaction not found Player’s balance is not updated";
+
+                try {
+                    if ($this->token != '') {
+                        $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                        $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                        $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                        if ($Mandante->propio == "S") {
+                            $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                            $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                            $response = array_merge($response, array(
+                                "balance" => $saldo,
+                                "currency" => $UsuarioMandante->getMoneda()
+                            ));
+                        }
+                    }
+                } catch (Exception $e) {
+                }
+
+                break;
+            case 20001:
+                $codeProveedor = 3;
+                $messageProveedor = "Insufficient funds";
+
+                $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                if ($Mandante->propio == "S") {
+                    $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                    $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                    $response = array_merge($response, array(
+                        "balance" => $saldo,
+                        "currency" => $UsuarioMandante->getMoneda()
+                    ));
+                }
+
+
+                break;
+
+            case 0:
+                $codeProveedor = 1;
+                $messageProveedor = "General Error. (" . $code . ")";
+
+                $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                if ($Mandante->propio == "S") {
+                    $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                    $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                    $response = array_merge($response, array(
+                        "balance" => $saldo,
+                        "currency" => $UsuarioMandante->getMoneda()
+                    ));
+                }
+
+                break;
+            case 27:
+                $codeProveedor = 1;
+                $messageProveedor = "General Error. (" . $code . ")";
+                break;
+            case 10041:
+                $codeProveedor = 1;
+                $messageProveedor = "General Error. (" . $code . ")";
+                break;
+            case 28:
+
+                $tipo = $this->transaccionApi->getTipo();
+
+                if ($tipo == "ROLLBACK") {
+                    $codeProveedor = 9;
+                    $messageProveedor = "Transaction not found";
+
+                    if ($this->token != '') {
+                        try {
+                            $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                            $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                            $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                            if ($Mandante->propio == "S") {
+                                $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                                $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                                $response = array_merge($response, array(
+                                    "balance" => $saldo,
+                                    "currency" => $UsuarioMandante->getMoneda()
+                                ));
+                            }
+                        } catch (Exception $e) {
+                        }
+                    }
+                } else {
+                    $codeProveedor = 1;
+                    $messageProveedor = "General Error. (" . $code . ")";
+
+                    if ($this->token != '') {
+                        try {
+                            $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                            $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                            $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                            if ($Mandante->propio == "S") {
+                                $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                                $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                                $response = array_merge($response, array(
+                                    "balance" => $saldo,
+                                    "currency" => $UsuarioMandante->getMoneda()
+                                ));
+                            }
+                        } catch (Exception $e) {
+                        }
+                    }
+                }
+
+
+                break;
+            case 29:
+
+                $tipo = $this->transaccionApi->getTipo();
+
+                if ($tipo == "ROLLBACK") {
+                    $codeProveedor = 9;
+                    $messageProveedor = "Transaction not found";
+
+                    if ($this->token != '') {
+                        try {
+                            $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                            $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                            $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                            if ($Mandante->propio == "S") {
+                                $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                                $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                                $response = array_merge($response, array(
+                                    "balance" => $saldo,
+                                    "currency" => $UsuarioMandante->getMoneda()
+                                ));
+                            }
+                        } catch (Exception $e) {
+                        }
+                    }
+                } else {
+                    $codeProveedor = 1;
+                    $messageProveedor = "General Error. (" . $code . ")";
+
+                    if ($this->token != '') {
+                        try {
+                            $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                            $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                            $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                            if ($Mandante->propio == "S") {
+                                $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                                $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                                $response = array_merge($response, array(
+                                    "balance" => $saldo,
+                                    "currency" => $UsuarioMandante->getMoneda()
+                                ));
+                            }
+                        } catch (Exception $e) {
+                        }
+                    }
+                }
+
+
+                break;
+
+            case 10001:
+
+                $tipo = $this->transaccionApi->getTipo();
+
+                if ($tipo == "ROLLBACK") {
+                    $codeProveedor = 0;
+                    $messageProveedor = "Transaction alredy processed";
+
+                    $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                    $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                    $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                    if ($Mandante->propio == "S") {
+                        $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                        $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                        $response = array_merge($response, array(
+                            "balance" => $saldo,
+                            "currency" => $UsuarioMandante->getMoneda()
+                        ));
+                    }
+                } else {
+                    $codeProveedor = 0;
+                    $messageProveedor = "ok";
+
+                    $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                    $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                    $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                    if ($Mandante->propio == "S") {
+                        $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                        $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                        $response = array_merge($response, array(
+                            "balance" => $saldo,
+                            "currency" => $UsuarioMandante->getMoneda()
+                        ));
+                    }
+                }
+
+
+                break;
+
+            case 10004:
+                $codeProveedor = 1;
+                $messageProveedor = "Debit after Rollback";
+
+                if ($this->token != '') {
+                    try {
+                        $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                        $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                        $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                        if ($Mandante->propio == "S") {
+                            $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                            $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                            $response = array_merge($response, array(
+                                "balance" => $saldo,
+                                "currency" => $UsuarioMandante->getMoneda()
+                            ));
+                        }
+                    } catch (Exception $e) {
+                    }
+                }
+
+                break;
+            case 10014:
+                $codeProveedor = 1;
+                $messageProveedor = "Debit transaction already processed";
+
+
+                if ($this->token != '') {
+                    try {
+                        $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                        $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                        $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                        if ($Mandante->propio == "S") {
+                            $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                            $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                            $response = array_merge($response, array(
+                                "balance" => $saldo,
+                                "currency" => $UsuarioMandante->getMoneda()
+                            ));
+                        }
+                    } catch (Exception $e) {
+                    }
+                }
+
+                break;
+
+
+            default:
+                $codeProveedor = 1;
+                $messageProveedor = "General Error. (" . $code . ")";
+
+                if ($this->token != '') {
+                    try {
+                        $UsuarioToken = new UsuarioToken($this->token, $Proveedor->getProveedorId());
+
+                        $UsuarioMandante = new UsuarioMandante($UsuarioToken->usuarioId);
+
+                        $Mandante = new Mandante($UsuarioMandante->mandante);
+
+                        if ($Mandante->propio == "S") {
+                            $Usuario = new Usuario($UsuarioMandante->usuarioMandante);
+
+                            $saldo = floatval(number_format(round($Usuario->getBalance(), 2), 2, '.', ''));
+
+                            $response = array_merge($response, array(
+                                "balance" => $saldo,
+                                "currency" => $UsuarioMandante->getMoneda()
+                            ));
+                        }
+                    } catch (Exception $e) {
+                    }
+                }
+
+                break;
+        }
+
+        $respuesta = json_encode(array_merge($response, array(
+            "errorCode" => $codeProveedor,
+            "errorDescription" => $messageProveedor,
+        )));
+
+        if ($this->transaccionApi != null) {
+            $this->transaccionApi->setTipo("R" . $this->transaccionApi->getTipo());
+            $this->transaccionApi->setRespuestaCodigo("ERROR");
+            $this->transaccionApi->setRespuesta($respuesta);
+            $TransaccionApiMySqlDAO = new TransaccionApiMySqlDAO();
+            $TransaccionApiMySqlDAO->insert($this->transaccionApi);
+            $TransaccionApiMySqlDAO->getTransaction()->commit();
+        }
+        /*$respuesta = json_encode(array_merge($response, array(
+                  "errmsj" => $message
+
+              )));*/
+
+        return $respuesta;
+    }
+
+
+}

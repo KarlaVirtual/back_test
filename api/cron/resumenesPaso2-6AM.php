@@ -1,0 +1,2363 @@
+<?php
+/**
+ * Resúmen cronométrico
+ *
+ *
+ * @package ninguno
+ * @author Daniel Tamayo <it@virtualsoft.tech>
+ * @version ninguna
+ * @access public
+ * @see no
+ * @date 18.10.17
+ *
+ */
+
+use Backend\cron\ResumenesCron;
+use Backend\dto\BonoInterno;
+use Backend\dto\ConfigurationEnvironment;
+use Backend\mysql\BonoDetalleMySqlDAO;
+
+
+
+require(__DIR__.'/../vendor/autoload.php');
+///home/devadmin/api/api/
+$hour = date('H');
+if(intval($hour)>9){
+    //exit();
+}
+
+ini_set('memory_limit', '-1');
+
+$message = "*CRON: (Inicio) * " . " ResumenesPaso2 - Fecha: " . date("Y-m-d H:i:s");
+
+exec("php -f ".__DIR__."../src/imports/Slack/message.php '" . $message . "' '#virtualsoft-cron' > /dev/null & ");
+
+
+$ResumenesCron = new ResumenesCron();
+
+//$ResumenesCron->generateResumenes();
+
+$fechaSoloDia = date("Y-m-d", strtotime('-1 days'));
+$fechaHoy = date("Y-m-d", time());
+$fecha1 = date("Y-m-d 00:00:00", strtotime('-1 days'));
+$fecha2 = date("Y-m-d 23:59:59", strtotime('-1 days'));
+$nameTable =" usuario_saldo";
+
+if ($_REQUEST["diaSpc"] != "") {
+    exit();
+
+    exec("php -f " . __DIR__ . "/resumenes.php " . $_REQUEST["diaSpc"] . " > /dev/null &");
+
+    $fechaSoloDia = date("Y-m-d", strtotime($_REQUEST["diaSpc"]));
+    $fecha1 = date("Y-m-d 00:00:00", strtotime($_REQUEST["diaSpc"]));
+    $fecha2 = date("Y-m-d 23:59:59", strtotime($_REQUEST["diaSpc"]));
+
+} else {
+    $arg1 = $argv[1];
+    if ($arg1 != "") {
+        $fechaSoloDia = date("Y-m-d", strtotime($arg1));
+        $fecha1 = date("Y-m-d 00:00:00", strtotime($arg1));
+        $fecha2 = date("Y-m-d 23:59:59", strtotime($arg1));
+
+        if($fechaSoloDia < date("Y-m-d", strtotime('-1 days'))) {
+            $nameTable = ' usuario_saldo_' . date("Y_m_d", strtotime($arg1)) . '';
+        }
+    } else {
+        //exit();
+    }
+
+}
+
+try {
+
+//BETWEEN '".$fecha1."' AND '".$fecha2."'
+
+    $strEliminado = "DELETE FROM usuario_deporte_resumen WHERE fecha_crea >= '" . $fecha1 . "';
+DELETE FROM usuario_casino_resumen WHERE fecha_crea >= '" . $fecha1 . "';
+DELETE FROM usucasino_detalle_resumen WHERE fecha_crea >= '" . $fecha1 . "';
+DELETE FROM usuario_retiro_resumen WHERE fecha_crea >= '" . $fecha1 . "';
+DELETE FROM usuario_recarga_resumen WHERE fecha_crea >= '" . $fecha1 . "';
+DELETE FROM usuario_bono_resumen WHERE fecha_crea >= '" . $fecha1 . "';
+DELETE FROM usuario_ajustes_resumen WHERE fecha_crea >= '" . $fecha1 . "';
+DELETE FROM usuario_saldo WHERE fecha_crea >= '" . $fecha1 . "';
+";
+
+    /* Recargas de USUARIOS por dia*/
+    $sqlRecargaUsuarioDia = "
+  SELECT
+    usuario_recarga.usuario_id usuarioId,
+    SUM(usuario_recarga.valor) valor,
+    '" . $fechaSoloDia . "' fecha_crea,
+    0 usucrea_id,
+    0 usumodif_id,
+    'A' estado,
+    COUNT(*) cantidad,
+    0 mediopago_id,
+    puntoventa_id puntoventa_id
+  FROM usuario_recarga
+    WHERE usuario_recarga.fecha_crea >= '" . $fechaSoloDia . " 06:00:00' AND usuario_recarga.fecha_crea <= '" . $fechaHoy . " 05:59:59'  and puntoventa_id != 0 /*and estado='A'*/  AND usuario_recarga.mandante  IN (3,4,5,6,7,10,22,25)
+  GROUP BY '" . $fechaSoloDia . "',usuario_recarga.usuario_id,usuario_recarga.puntoventa_id
+/*  UNION
+    SELECT
+    usuario_recarga.usuario_id usuarioId,
+    -SUM(usuario_recarga.valor) valor,
+    date_format(usuario_recarga.fecha_crea, '%Y-%m-%d') fecha_crea,
+    0 usucrea_id,
+    0 usumodif_id,
+    'I' estado,
+    COUNT(*) cantidad,
+    0 mediopago_id,
+    puntoventa_id puntoventa_id
+  FROM usuario_recarga
+    WHERE date_format(usuario_recarga.fecha_elimina, '%Y-%m-%d') = '" . $fechaSoloDia . "' and puntoventa_id != 0 AND estado='I'
+  GROUP BY date_format(usuario_recarga.fecha_elimina, '%Y-%m-%d'),usuario_recarga.usuario_id,usuario_recarga.puntoventa_id;*/
+  ";
+
+    /* Recargas hechos por PUNTO DE VENTA por dia*/
+
+
+    $sqlRecargaPuntoVentaDia = "
+SELECT
+    usuario_recarga.puntoventa_id usuarioId,
+    SUM(usuario_recarga.valor) valor,
+    '" . $fechaSoloDia . "' fecha_crea,
+    0 usucrea_id,
+    0 usumodif_id,
+    'A' estado,
+    COUNT(*) cantidad
+  FROM usuario_recarga
+    WHERE usuario_recarga.fecha_crea >= '" . $fechaSoloDia . " 06:00:00' AND usuario_recarga.fecha_crea <= '" . $fechaHoy . " 05:59:59'  AND usuario_recarga.puntoventa_id != 0  AND usuario_recarga.mandante IN (3,4,5,6,7,10,22,25)
+  GROUP BY '" . $fechaSoloDia . "', usuario_recarga.puntoventa_id
+  UNION
+  
+  SELECT
+    usuario_recarga.puntoventa_id usuarioId,
+    -SUM(usuario_recarga.valor) valor,
+    '" . $fechaSoloDia . "' fecha_crea,
+    0 usucrea_id,
+    0 usumodif_id,
+    'I' estado,
+    COUNT(*) cantidad
+  FROM usuario_recarga
+    WHERE usuario_recarga.fecha_elimina >= '" . $fechaSoloDia . " 06:00:00' AND usuario_recarga.fecha_elimina <= '" . $fechaHoy . " 05:59:59' AND usuario_recarga.puntoventa_id != 0 AND estado='I'  AND usuario_recarga.mandante  IN (3,4,5,6,7,10,22,25)
+  GROUP BY '" . $fechaSoloDia . "', usuario_recarga.puntoventa_id";
+
+
+    /* Recargas hechos por PASARELAS por dia*/
+
+    $sqlRecargaPasarelaDia = "
+SELECT
+    usuario_recarga.usuario_id usuarioId,
+    SUM(usuario_recarga.valor) valor,
+    '" . $fechaSoloDia . "' fecha_crea,
+    0 usucrea_id,
+    0 usumodif_id,
+    'A' estado,
+    COUNT(*) cantidad,
+    transaccion_producto.producto_id mediopago_id
+
+  FROM usuario_recarga
+
+    INNER JOIN transaccion_producto ON (transaccion_producto.final_id = usuario_recarga.recarga_id)
+    WHERE usuario_recarga.fecha_crea >= '" . $fechaSoloDia . " 06:00:00' AND usuario_recarga.fecha_crea <= '" . $fechaHoy . " 05:59:59'   AND  usuario_recarga.puntoventa_id = 0  AND usuario_recarga.mandante  IN (3,4,5,6,7,10,22,25)
+  GROUP BY '" . $fechaSoloDia . "',usuario_recarga.usuario_id, transaccion_producto.producto_id
+  ORDER BY '" . $fechaSoloDia . "',usuario_recarga.usuario_id, transaccion_producto.producto_id;";
+
+    /* Retiros pagados a USUARIOS por dia*/
+
+    $sqlRetiroUsuarioDiaPagado = "
+SELECT
+    cuenta_cobro.usuario_id usuarioId,
+    SUM(cuenta_cobro.valor) valor,
+    '" . $fechaSoloDia . "' fecha_crea,
+    0 usucrea_id,
+    0 usumodif_id,
+    'I' estado,
+    COUNT(*) cantidad,
+    cuenta_cobro.puntoventa_id puntoventa_id
+  FROM cuenta_cobro
+    WHERE cuenta_cobro.estado='I' AND cuenta_cobro.fecha_pago >= '" . $fechaSoloDia . " 06:00:00' AND cuenta_cobro.fecha_pago <= '" . $fechaHoy . " 05:59:59' AND cuenta_cobro.puntoventa_id != 0 AND cuenta_cobro.mandante IN (3,4,5,6,7,10,22,25)
+  GROUP BY '" . $fechaSoloDia . "', cuenta_cobro.usuario_id,cuenta_cobro.puntoventa_id
+  ORDER BY '" . $fechaSoloDia . "', cuenta_cobro.usuario_id,cuenta_cobro.puntoventa_id;";
+
+    /* Retiros pagados a USUARIOS por dia pagados CUENTA BANCARIA fisicamente */
+
+    $sqlRetiroUsuarioDiaPagadoCuentaBancariaFisicamente = "
+SELECT
+    cuenta_cobro.usuario_id usuarioId,
+    SUM(cuenta_cobro.valor) valor,
+    '" . $fechaSoloDia . "' fecha_crea,
+    0 usucrea_id,
+    0 usumodif_id,
+    'I' estado,
+    COUNT(*) cantidad,
+    0 puntoventa_id
+  FROM cuenta_cobro
+    WHERE cuenta_cobro.estado='I' AND cuenta_cobro.fecha_pago >= '" . $fechaSoloDia . " 06:00:00' AND cuenta_cobro.fecha_pago <= '" . $fechaHoy . " 05:59:59' AND cuenta_cobro.puntoventa_id = 0  AND cuenta_cobro.transproducto_id = 0  AND cuenta_cobro.mandante IN (3,4,5,6,7,10,22,25)
+  GROUP BY '" . $fechaSoloDia . "', cuenta_cobro.usuario_id,cuenta_cobro.puntoventa_id
+  ORDER BY '" . $fechaSoloDia . "', cuenta_cobro.usuario_id,cuenta_cobro.puntoventa_id;";
+
+    /* Retiros PENDIENTES a USUARIOS por dia*/
+
+    $sqlRetiroUsuarioDiaPendiente = "
+SELECT
+    cuenta_cobro.usuario_id usuarioId,
+    SUM(cuenta_cobro.valor) valor,
+    '" . $fechaSoloDia . "' fecha_crea,
+    0 usucrea_id,
+    0 usumodif_id,
+    'A' estado,
+    COUNT(*) cantidad
+  FROM cuenta_cobro
+
+    WHERE  cuenta_cobro.fecha_crea >= '" . $fechaSoloDia . " 06:00:00' AND cuenta_cobro.fecha_crea <= '" . $fechaHoy . " 05:59:59'   AND cuenta_cobro.mandante  IN (3,4,5,6,7,10,22,25)
+
+  GROUP BY '" . $fechaSoloDia . "', cuenta_cobro.usuario_id
+  ORDER BY '" . $fechaSoloDia . "', cuenta_cobro.usuario_id;";
+
+    /* Retiros ELIMINADAS a USUARIOS por dia*/
+
+    $sqlRetiroUsuarioDiaEliminadas = "
+SELECT
+    cuenta_cobro.usuario_id usuarioId,
+    SUM(cuenta_cobro.valor) valor,
+    '" . $fechaSoloDia . "' fecha_crea,
+    0 usucrea_id,
+    0 usumodif_id,
+    'E' estado,
+    COUNT(*) cantidad
+  FROM cuenta_cobro
+
+    WHERE  cuenta_cobro.fecha_accion >= '" . $fechaSoloDia . " 06:00:00' AND cuenta_cobro.fecha_accion <= '" . $fechaHoy . " 05:59:59'   
+    AND cuenta_cobro.estado ='E' AND cuenta_cobro.mandante  IN (3,4,5,6,7,10,22,25)
+
+  GROUP BY '" . $fechaSoloDia . "', cuenta_cobro.usuario_id
+  ORDER BY '" . $fechaSoloDia . "', cuenta_cobro.usuario_id;";
+
+
+    $sqlRetiroUsuarioDiaDevueltas = "
+SELECT
+    cuenta_cobro.usuario_id usuarioId,
+    SUM(cuenta_cobro.valor) valor,
+    '" . $fechaSoloDia . "' fecha_crea,
+    0 usucrea_id,
+    0 usumodif_id,
+    'D' estado,
+    COUNT(*) cantidad
+  FROM cuenta_cobro
+
+    WHERE 
+     cuenta_cobro.fecha_accion >= '" . $fechaSoloDia . " 06:00:00' AND cuenta_cobro.fecha_accion <= '" . $fechaHoy . " 05:59:59' 
+     AND cuenta_cobro.estado ='D' AND cuenta_cobro.mandante  IN (3,4,5,6,7,10,22,25)
+
+  GROUP BY '" . $fechaSoloDia . "', cuenta_cobro.usuario_id
+  ORDER BY '" . $fechaSoloDia . "', cuenta_cobro.usuario_id;";
+
+    /* Retiros RECHAZADAS a USUARIOS por dia*/
+
+    $sqlRetiroUsuarioDiaRechazadas = "
+SELECT
+    cuenta_cobro.usuario_id usuarioId,
+    SUM(cuenta_cobro.valor) valor,
+    '" . $fechaSoloDia . "' fecha_crea,
+    0 usucrea_id,
+    0 usumodif_id,
+    'R' estado,
+    COUNT(*) cantidad
+  FROM cuenta_cobro
+
+    WHERE 
+           cuenta_cobro.fecha_accion >= '" . $fechaSoloDia . " 06:00:00' AND cuenta_cobro.fecha_accion <= '" . $fechaHoy . " 05:59:59' 
+           AND cuenta_cobro.estado ='R' AND cuenta_cobro.mandante  IN (3,4,5,6,7,10,22,25)
+
+  GROUP BY '" . $fechaSoloDia . "', cuenta_cobro.usuario_id
+  ORDER BY '" . $fechaSoloDia . "', cuenta_cobro.usuario_id;";
+
+    /* Retiros PENDIENTES a USUARIOS HOY*/
+
+    $sqlRetiroUsuarioPendienteHoy = "
+SELECT
+    cuenta_cobro.usuario_id usuarioId,
+    SUM(cuenta_cobro.valor) valor,
+    '" . $fechaSoloDia . "' fecha_crea,
+    0 usucrea_id,
+    0 usumodif_id,
+    'P' estado,
+    COUNT(*) cantidad
+  FROM cuenta_cobro
+
+    WHERE cuenta_cobro.estado IN ('A','M','S','P') AND cuenta_cobro.mandante IN (3,4,5,6,7,10,22,25)
+
+  GROUP BY  cuenta_cobro.usuario_id
+  ORDER BY  cuenta_cobro.usuario_id;";
+
+
+    /* Retiros  pagados por PUNTOS DE VENTA por dia*/
+
+    $sqlRetiroPuntoVentaDiaPagado = "
+ SELECT
+    cuenta_cobro.puntoventa_id usuarioId,
+    SUM(cuenta_cobro.valor) valor,
+    '" . $fechaSoloDia . "' fecha_crea,
+    0 usucrea_id,
+    0 usumodif_id,
+    'I' estado,
+    COUNT(*) cantidad
+  FROM cuenta_cobro
+
+
+    WHERE cuenta_cobro.estado='I' AND 
+           cuenta_cobro.fecha_pago >= '" . $fechaSoloDia . " 06:00:00' AND cuenta_cobro.fecha_pago <= '" . $fechaHoy . " 05:59:59' 
+           AND cuenta_cobro.puntoventa_id != 0 AND cuenta_cobro.mandante  IN (3,4,5,6,7,10,22,25)
+
+  GROUP BY '" . $fechaSoloDia . "', cuenta_cobro.puntoventa_id
+  ORDER BY '" . $fechaSoloDia . "', cuenta_cobro.puntoventa_id;";
+
+    /* Retiros  pagados por Productos por dia*/
+
+    $sqlRetiroProductosPagado = "
+SELECT
+    cuenta_cobro.usuario_id usuarioId,
+    SUM(cuenta_cobro.valor) valor,
+    '" . $fechaSoloDia . "' fecha_crea,
+    0 usucrea_id,
+    0 usumodif_id,
+    'I' estado,
+    COUNT(*) cantidad,
+    transaccion_producto.producto_id producto_id
+  FROM cuenta_cobro
+  
+  INNER JOIN transaccion_producto ON (transaccion_producto.transproducto_id = cuenta_cobro.transproducto_id)
+
+
+    WHERE   cuenta_cobro.estado = 'I' AND 
+           cuenta_cobro.fecha_pago >= '" . $fechaSoloDia . " 06:00:00' AND cuenta_cobro.fecha_pago <= '" . $fechaHoy . " 05:59:59' 
+           AND cuenta_cobro.mandante  IN (3,4,5,6,7,10,22,25)
+
+  GROUP BY '" . $fechaSoloDia . "',cuenta_cobro.usuario_id, transaccion_producto.producto_id
+  ORDER BY '" . $fechaSoloDia . "',cuenta_cobro.usuario_id, transaccion_producto.producto_id;";
+
+    /* Retiros  pagados por PUNTOS DE VENTA por dia*/
+    /*
+    $sqlApuestasDeportivasUsuarioDia = "INSERT INTO usuario_deporte_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+        SELECT
+      it_ticket_enc.usuario_id,
+      SUM(it_ticket_enc.vlr_apuesta),
+      date_format(it_ticket_enc.fecha_crea, '%Y-%m-%d'),
+          0,
+          0,
+          'A',
+          '1',
+      COUNT(*) cantidad
+    FROM it_ticket_enc
+      INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = it_ticket_enc.usuario_id)
+
+        WHERE date_format(it_ticket_enc.fecha_crea, '%Y-%m-%d') = '".$fechaSoloDia."' AND usuario_perfil.perfil_id = \"USUONLINE\" AND it_ticket_enc.eliminado='N'
+    GROUP BY date_format(it_ticket_enc.fecha_crea, '%Y-%m-%d'), it_ticket_enc.usuario_id
+    ORDER BY date_format(it_ticket_enc.fecha_crea, '%Y-%m-%d'),it_ticket_enc.usuario_id;";
+
+    $sqlPremiosDeportivasUsuarioDia = "INSERT INTO usuario_deporte_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+    SELECT
+      it_ticket_enc.usuario_id,
+      SUM(it_ticket_enc.vlr_premio),
+      date_format(it_ticket_enc.fecha_cierre, '%Y-%m-%d'),
+      0,
+      0,
+      'C',
+      '2',
+      COUNT(*) cantidad
+    FROM it_ticket_enc
+      INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = it_ticket_enc.usuario_id)
+
+        WHERE date_format(it_ticket_enc.fecha_cierre, '%Y-%m-%d') = '".$fechaSoloDia."' AND usuario_perfil.perfil_id = \"USUONLINE\" AND it_ticket_enc.premiado='S' AND it_ticket_enc.eliminado='N'
+
+    GROUP BY date_format(it_ticket_enc.fecha_cierre, '%Y-%m-%d'), it_ticket_enc.usuario_id
+    ORDER BY date_format(it_ticket_enc.fecha_cierre, '%Y-%m-%d'),  it_ticket_enc.usuario_id;";*/
+
+    $sqlApuestasDeportivasUsuarioDia = "
+SELECT
+  it_transaccion.usuario_id usuarioId, 
+  SUM(it_transaccion.valor) valor,
+  '" . $fechaSoloDia . "' fecha_crea,
+      0 usucrea_id,
+      0 usumodif_id,
+      'A' estado,
+      tipo tipo,
+  COUNT(*) cantidad
+FROM it_transaccion
+  INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = it_transaccion.usuario_id)
+
+    WHERE  ((it_transaccion.fecha_crea = '" . $fechaSoloDia . "' AND it_transaccion.hora_crea >= '06:00:00')
+    OR (it_transaccion.fecha_crea = '" . $fechaHoy . "' AND it_transaccion.hora_crea <= '05:59:59')) 
+    AND usuario_perfil.perfil_id = \"USUONLINE\"  AND usuario_perfil.mandante  IN (3,4,5,6,7,10,22,25)
+GROUP BY '" . $fechaSoloDia . "',it_transaccion.tipo, it_transaccion.usuario_id
+ORDER BY '" . $fechaSoloDia . "',it_transaccion.tipo,it_transaccion.usuario_id;";
+
+    $sqlApuestasDeportivasUsuarioDiaFECHACIERREBET = "
+SELECT
+  it_transaccion.usuario_id usuarioId, 
+  SUM(it_transaccion.valor) valor,
+  '" . $fechaSoloDia . "' fecha_crea,
+      0 usucrea_id,
+      0 usumodif_id,
+      'A' estado,
+      'CLOSEDBET' tipo,
+  COUNT(*) cantidad
+FROM it_transaccion
+  INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = it_transaccion.usuario_id)
+  INNER JOIN it_ticket_enc ON (it_ticket_enc.ticket_id = it_transaccion.ticket_id)
+                        inner join time_dimension4
+                                        on (time_dimension4.datestr = it_ticket_enc.fecha_cierre and
+                                            time_dimension4.hour2str = it_ticket_enc.hora_cierre)
+                        inner join time_dimension4 fecha_creaTime
+                                        on (fecha_creaTime.datestr = it_ticket_enc.fecha_crea and
+                                            fecha_creaTime.hour2str = it_ticket_enc.hora_crea)
+
+    WHERE    
+    
+            ((((it_ticket_enc.eliminado = 'S' AND fecha_creaTime.dbdate1 != time_dimension4.dbdate1) OR (it_ticket_enc.eliminado = 'N' )) AND time_dimension4.dbdate1 = '" . $fechaSoloDia . "'))
+
+    
+    AND it_transaccion.tipo='BET'   
+    AND
+    time_dimension4.dbdate1 = '".$fechaSoloDia."'
+     AND usuario_perfil.mandante  IN (3,4,5,6,7,10,22,25)
+GROUP BY '" . $fechaSoloDia . "',it_transaccion.tipo, it_transaccion.usuario_id
+ORDER BY '" . $fechaSoloDia . "',it_transaccion.tipo,it_transaccion.usuario_id;";
+
+    $sqlApuestasDeportivasPuntoVentaDia = "
+SELECT
+  CASE WHEN usuario_perfil.perfil_id != 'USUONLINE' then it_ticket_enc.usuario_id else 0 end usuarioId,
+  SUM(CASE WHEN usuario_perfil.perfil_id != 'USUONLINE' then it_ticket_enc.vlr_apuesta else 0 end) valor,
+  '" . $fechaSoloDia . "' fecha_crea,
+  0 usucrea_id,
+  0 usumodif_id ,
+  'A' estado,
+  '1' tipo,
+  SUM(CASE WHEN usuario_perfil.perfil_id != 'USUONLINE' then 1 else 0 end) cantidad
+FROM it_ticket_enc
+  INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = it_ticket_enc.usuario_id)
+
+    WHERE  ((it_ticket_enc.fecha_crea = '" . $fechaSoloDia . "' AND it_ticket_enc.hora_crea >= '06:00:00')
+    OR (it_ticket_enc.fecha_crea = '" . $fechaHoy . "' AND it_ticket_enc.hora_crea <= '05:59:59')) AND it_ticket_enc.eliminado ='N' AND usuario_perfil.mandante  IN (3,4,5,6,7,10,22,25)
+GROUP BY '" . $fechaSoloDia . "', it_ticket_enc.usuario_id HAVING usuarioId != '0'
+ORDER BY '" . $fechaSoloDia . "',it_ticket_enc.usuario_id;";
+
+    $sqlApuestasDeportivasPuntoVentaoDiaCierre = "
+SELECT
+  CASE WHEN usuario_perfil.perfil_id != 'USUONLINE' then it_ticket_enc.usuario_id else 0 end usuarioId,
+  SUM(CASE WHEN usuario_perfil.perfil_id != 'USUONLINE' then it_ticket_enc.vlr_apuesta else 0 end) valor,
+      '" . $fechaSoloDia . "' fecha_crea,
+  0 usucrea_id,
+  0 usumodif_id,
+  'A' estado,
+  '2' tipo,
+  SUM(CASE WHEN usuario_perfil.perfil_id != 'USUONLINE' then 1 ELSE 0 END) cantidad
+FROM it_ticket_enc
+  INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = it_ticket_enc.usuario_id)
+
+    WHERE  ((it_ticket_enc.fecha_cierre = '" . $fechaSoloDia . "' AND it_ticket_enc.hora_cierre >= '06:00:00')
+    OR (it_ticket_enc.fecha_cierre = '" . $fechaHoy . "' AND it_ticket_enc.hora_cierre <= '05:59:59')) AND  it_ticket_enc.eliminado='N' AND usuario_perfil.mandante  IN (3,4,5,6,7,10,22,25)
+
+GROUP BY '" . $fechaSoloDia . "', it_ticket_enc.usuario_id HAVING usuarioId != '0'
+ORDER BY it_ticket_enc.usuario_id;";
+
+    $sqlPremiosDeportivasPuntoVentaoDia = "
+SELECT
+  CASE WHEN usuario_perfil.perfil_id != 'USUONLINE' then it_ticket_enc.usuario_id else 0 END usuarioId,
+  SUM(CASE WHEN usuario_perfil.perfil_id != 'USUONLINE' then it_ticket_enc.vlr_premio else 0 end) valor,
+  '" . $fechaSoloDia . "' fecha_crea,
+  0 usucrea_id,
+  0 usumodif_id,
+  'P' estado,
+  '2' tipo,
+  sum(CASE WHEN usuario_perfil.perfil_id != 'USUONLINE' then 1 else 0 end) cantidad
+FROM it_ticket_enc
+  INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = it_ticket_enc.usuario_id)
+
+    WHERE  ((it_ticket_enc.fecha_cierre = '" . $fechaSoloDia . "' AND it_ticket_enc.hora_cierre >= '06:00:00')
+    OR (it_ticket_enc.fecha_cierre = '" . $fechaHoy . "' AND it_ticket_enc.hora_cierre <= '05:59:59'))  AND it_ticket_enc.premiado='S' AND it_ticket_enc.eliminado='N' AND usuario_perfil.mandante  IN (3,4,5,6,7,10,22,25)
+
+GROUP BY '" . $fechaSoloDia . "', it_ticket_enc.usuario_id HAVING usuarioId != '0'
+ORDER BY it_ticket_enc.usuario_id;";
+
+
+    $sqlPremiosPagadosDeportivasPuntoVentaoDia = "
+SELECT
+  CASE WHEN usuario_perfil.perfil_id != 'USUONLINE' then it_ticket_enc.usuario_id else 0 end usuarioId,
+  SUM(CASE WHEN usuario_perfil.perfil_id != 'USUONLINE' then it_ticket_enc.vlr_premio-it_ticket_enc.impuesto else 0 end ) valor,
+  '" . $fechaSoloDia . "' fecha_crea,
+  0 usucrea_id,
+  0 usumodif_id,
+  'P' estado,
+  '3' tipo,
+  SUM(CASE WHEN usuario_perfil.perfil_id != 'USUONLINE' then 1 ELSE 0 END) cantidad
+FROM it_ticket_enc
+  INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = it_ticket_enc.usuario_id)
+
+    WHERE  ((it_ticket_enc.fecha_pago = '" . $fechaSoloDia . "' AND it_ticket_enc.hora_pago >= '06:00:00')
+    OR (it_ticket_enc.fecha_pago = '" . $fechaHoy . "' AND it_ticket_enc.hora_pago <= '05:59:59')) AND it_ticket_enc.premiado='S' AND it_ticket_enc.eliminado='N' AND usuario_perfil.mandante  IN (3,4,5,6,7,10,22,25)
+
+GROUP BY '" . $fechaSoloDia . "', it_ticket_enc.usuario_id HAVING usuarioId != '0'
+ORDER BY it_ticket_enc.usuario_id;";
+
+    $sqlPremiosDeportivasPuntoVentaoDiaCONTIPO = "
+SELECT
+  CASE WHEN usuario_perfil.perfil_id != 'USUONLINE' then it_transaccion.usuario_id else 0 end usuarioId,
+  SUM(CASE WHEN usuario_perfil.perfil_id != 'USUONLINE' then it_transaccion.valor else 0 end) valor,
+  it_transaccion.fecha_crea fecha_crea,
+  0 usucrea_id,
+  0 usumodif_id,
+  'A' estado,
+  tipo tipo,
+  SUM(CASE WHEN usuario_perfil.perfil_id != 'USUONLINE' then 1 ELSE 0 END) cantidad
+FROM it_ticket_enc
+  INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = it_ticket_enc.usuario_id)
+
+    WHERE (it_transaccion.fecha_crea) = '" . $fechaSoloDia . "' 
+
+GROUP BY it_transaccion.fecha_crea, it_transaccion.usuario_id HAVING usuarioId != '0'
+ORDER BY it_transaccion.usuario_id;";
+
+    /*$sqlApuestasCasinoDia="INSERT INTO usuario_casino_resumen (usuario_id, valor,valor_premios, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+    SELECT
+      transaccion_juego.usuario_id,
+      SUM(transaccion_juego.valor_ticket),
+      SUM(transaccion_juego.valor_premio),
+      date_format(transaccion_juego.fecha_crea, '%Y-%m-%d'),
+      0,
+      0,
+      'A',
+      '1',
+      COUNT(*) cantidad
+    FROM transaccion_juego
+      INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = transaccion_juego.usuario_id)
+
+        WHERE date_format(transaccion_juego.fecha_crea, '%Y-%m-%d') = '".$fechaSoloDia."' AND usuario_perfil.perfil_id ='USUONLINE'
+
+    GROUP BY date_format(transaccion_juego.fecha_crea, '%Y-%m-%d'), transaccion_juego.usuario_id
+    ORDER BY date_format(transaccion_juego.fecha_crea, '%Y-%m-%d'),transaccion_juego.usuario_id;";*/
+
+    $sqlApuestasCasinoDia = "
+SELECT
+  transaccion_juego.usuario_id usuarioId,
+  SUM(transjuego_log.valor) valor,
+  SUM(CASE WHEN transaccion_juego.tipo ='FREECASH' THEN transjuego_log.saldo_free  ELSE 0 END) valor_premios,
+  date_format(time_dimension4.dbdate1, '%Y-%m-%d') fecha_crea,
+  0 usucrea_id, 
+  0 usumodif_id,
+  'A' estado, 
+  CASE WHEN transaccion_juego.tipo ='FREECASH' THEN '6' WHEN transaccion_juego.tipo ='FREESPIN' THEN '4'  ELSE '1' END tipo,
+  COUNT(*) cantidad
+      FROM transjuego_log      
+      
+      inner join time_dimension4 force index (time_dimension4_timestampint_dbtimestamp_index)
+                    on (time_dimension4.dbtimestamp = transjuego_log.fecha_crea)
+      
+        INNER JOIN transaccion_juego ON (transjuego_log.transjuego_id =transaccion_juego.transjuego_id)
+             INNER JOIN usuario_mandante ON (transaccion_juego.usuario_id = usumandante_id)
+
+    WHERE time_dimension4.dbdate1 = '" . $fechaSoloDia . "' AND transjuego_log.tipo LIKE '%DEBIT%'  AND usuario_mandante.mandante  IN (3,4,5,6,7,10,22,25)
+GROUP BY transaccion_juego.tipo,time_dimension4.dbdate1, transaccion_juego.usuario_id
+ORDER BY time_dimension4.dbdate1,transaccion_juego.usuario_id;";
+
+    $sqlPremiosCasinoDia = "
+SELECT
+  transaccion_juego.usuario_id usuarioId,
+  SUM(transjuego_log.valor) valor,
+  SUM(transjuego_log.valor) valor_premios,
+  date_format(time_dimension4.dbdate1, '%Y-%m-%d') fecha_crea,
+  0 usucrea_id,
+  0 usumodif_id,
+  'A' estado,
+  CASE WHEN transaccion_juego.tipo ='FREECASH' THEN '7' WHEN transaccion_juego.tipo ='FREESPIN' THEN '5' ELSE '2' END tipo,
+  COUNT(*) cantidad
+      FROM transjuego_log         
+      inner join time_dimension4 force index (time_dimension4_timestampint_dbtimestamp_index)
+                    on (time_dimension4.dbtimestamp = transjuego_log.fecha_crea)
+
+      
+        INNER JOIN transaccion_juego ON (transjuego_log.transjuego_id =transaccion_juego.transjuego_id)
+             INNER JOIN usuario_mandante ON (transaccion_juego.usuario_id = usumandante_id)
+
+    WHERE time_dimension4.dbdate1 = '" . $fechaSoloDia . "' AND (transjuego_log.tipo LIKE '%CREDIT%'OR transjuego_log.tipo like '%ROLLBACK%')  AND usuario_mandante.mandante  IN (3,4,5,6,7,10,22,25)
+GROUP BY transaccion_juego.tipo,time_dimension4.dbdate1, transaccion_juego.usuario_id
+ORDER BY time_dimension4.dbdate1,transaccion_juego.usuario_id;";
+
+
+    $sqlApuestasCasinoDiaConProducto = "
+SELECT
+  transaccion_juego.usuario_id usuarioId,
+  producto_mandante.prodmandante_id,
+  producto_mandante.producto_id,
+  producto.subproveedor_id,
+  producto.proveedor_id,
+  producto_mandante.mandante,
+  SUM(transjuego_log.valor) valor,
+  SUM(transjuego_log.valor) valor_premios,
+  date_format(time_dimension4.dbdate1, '%Y-%m-%d') fecha_crea,
+  0 usucrea_id,
+  0 usumodif_id,
+  'A' estado, 
+  '1' tipo,
+  COUNT(*) cantidad
+      FROM transjuego_log
+            inner join time_dimension4 force index (time_dimension4_timestampint_dbtimestamp_index)
+                    on (time_dimension4.dbtimestamp = transjuego_log.fecha_crea)
+      INNER JOIN transaccion_juego ON (transjuego_log.transjuego_id =transaccion_juego.transjuego_id)
+        INNER JOIN producto_mandante ON (prodmandante_id =transaccion_juego.producto_id)
+        INNER JOIN producto ON (producto.producto_id =producto_mandante.producto_id)
+        INNER JOIN usuario_mandante ON (transaccion_juego.usuario_id = usumandante_id)
+
+    WHERE time_dimension4.dbdate1 = '" . $fechaSoloDia . "'  AND transjuego_log.tipo LIKE '%DEBIT%'  AND usuario_mandante.mandante  IN (3,4,5,6,7,10,22,25)
+GROUP BY transaccion_juego.producto_id,time_dimension4.dbdate1, transaccion_juego.usuario_id
+ORDER BY time_dimension4.dbdate1,transaccion_juego.usuario_id;";
+
+    $sqlPremiosCasinoDiaConProducto = "
+SELECT
+  transaccion_juego.usuario_id usuarioId,
+  producto_mandante.prodmandante_id,
+  producto_mandante.producto_id,
+  producto.subproveedor_id,
+  producto.proveedor_id,
+  producto_mandante.mandante,
+  SUM(transjuego_log.valor) valor,
+  SUM(transjuego_log.valor) valor_premios,
+  date_format(time_dimension4.dbdate1, '%Y-%m-%d') fecha_crea,
+  0 usucrea_id,
+  0 usumodif_id,
+  'A' estado,
+  '2' tipo,
+  COUNT(*) cantidad
+      FROM transjuego_log
+                  inner join time_dimension4 force index (time_dimension4_timestampint_dbtimestamp_index)
+                    on (time_dimension4.dbtimestamp = transjuego_log.fecha_crea)
+
+        INNER JOIN transaccion_juego ON (transjuego_log.transjuego_id =transaccion_juego.transjuego_id)
+        INNER JOIN producto_mandante ON (prodmandante_id =transaccion_juego.producto_id)
+        INNER JOIN producto ON (producto.producto_id =producto_mandante.producto_id)
+        INNER JOIN usuario_mandante ON (transaccion_juego.usuario_id = usumandante_id)
+
+    WHERE time_dimension4.dbdate1 = '" . $fechaSoloDia . "'  AND (transjuego_log.tipo LIKE '%CREDIT%'OR transjuego_log.tipo like '%ROLLBACK%')  AND usuario_mandante.mandante  IN (3,4,5,6,7,10,22,25)
+GROUP BY transaccion_juego.producto_id,time_dimension4.dbdate1, transaccion_juego.usuario_id
+ORDER BY time_dimension4.dbdate1,transaccion_juego.usuario_id;";
+
+
+    /*
+    $sqlPremiosCasinoDia ="INSERT INTO usucasino_detalle_resumen (usuario_id, producto_id, valor,valor_premios, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+    SELECT
+      transaccion_juego.usuario_id,
+      transaccion_juego.producto_id,
+      SUM(transaccion_juego.valor_ticket),
+      SUM(transaccion_juego.valor_premio),
+      date_format(transaccion_juego.fecha_crea, '%Y-%m-%d'),
+      0,
+      0,
+      'A',
+      '1',
+      COUNT(*) cantidad
+    FROM transaccion_juego
+      INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = transaccion_juego.usuario_id)
+
+        WHERE date_format(transaccion_juego.fecha_crea, '%Y-%m-%d') = '".$fechaSoloDia."' AND usuario_perfil.perfil_id = 'USUONLINE'
+
+    GROUP BY date_format(transaccion_juego.fecha_crea, '%Y-%m-%d'),transaccion_juego.producto_id, transaccion_juego.usuario_id
+    ORDER BY date_format(transaccion_juego.fecha_crea, '%Y-%m-%d'),transaccion_juego.producto_id,transaccion_juego.usuario_id;";*/
+
+    $sqlDetalleApuesCasinoDia = "
+SELECT
+  transaccion_juego.usuario_id usuarioId,
+  transaccion_juego.producto_id producto_id,
+  SUM(transjuego_log.valor) valor,
+  SUM(CASE WHEN transaccion_juego.tipo = 'FREECASH' THEN transjuego_log.saldo_free ElSE 0 END) valor_premios,
+  date_format(time_dimension4.dbdate1, '%Y-%m-%d') fecha_crea,
+  0 usucrea_id,
+  0 usumodif_id,
+  'A' estado,
+  CASE WHEN transaccion_juego.tipo = 'FREESPIN' THEN 'DEBITFREESPIN' WHEN transaccion_juego.tipo = 'FREECASH' THEN 'DEBITFREECASH' ElSE 'DEBIT' END tipo,
+  COUNT(*) cantidad
+      FROM transjuego_log
+                  inner join time_dimension4 force index (time_dimension4_timestampint_dbtimestamp_index)
+                    on (time_dimension4.dbtimestamp = transjuego_log.fecha_crea)
+
+        INNER JOIN transaccion_juego ON (transjuego_log.transjuego_id =transaccion_juego.transjuego_id)
+             INNER JOIN usuario_mandante ON (transaccion_juego.usuario_id = usumandante_id)
+
+    WHERE time_dimension4.dbdate1 = '" . $fechaSoloDia . "' AND transjuego_log.tipo LIKE '%DEBIT%'  AND usuario_mandante.mandante  IN (3,4,5,6,7,10,22,25)
+
+GROUP BY time_dimension4.dbdate1,transaccion_juego.producto_id, transaccion_juego.usuario_id,transaccion_juego.tipo
+ORDER BY time_dimension4.dbdate1,transaccion_juego.producto_id,transaccion_juego.usuario_id,transaccion_juego.tipo;";
+
+    $sqlDetallePremiosCasinoDia = "
+SELECT
+  transaccion_juego.usuario_id usuarioId,
+  transaccion_juego.producto_id producto_id,
+  SUM(transjuego_log.valor) valor,
+  SUM(transjuego_log.valor) valor_premios,
+  date_format(time_dimension4.dbdate1, '%Y-%m-%d') fecha_crea,
+  0 usucrea_id,
+  0 usumodif_id,
+  'A' estado,
+  CASE WHEN transaccion_juego.tipo = 'FREESPIN' THEN 'CREDITFREESPIN' WHEN transaccion_juego.tipo = 'FREECASH' THEN 'CREDITFREECASH' ElSE 'CREDIT' END tipo,
+  COUNT(*) cantidad
+      FROM transjuego_log
+                  inner join time_dimension4 force index (time_dimension4_timestampint_dbtimestamp_index)
+                    on (time_dimension4.dbtimestamp = transjuego_log.fecha_crea)
+
+        INNER JOIN transaccion_juego ON (transjuego_log.transjuego_id =transaccion_juego.transjuego_id)
+             INNER JOIN usuario_mandante ON (transaccion_juego.usuario_id = usumandante_id)
+
+    WHERE time_dimension4.dbdate1 = '" . $fechaSoloDia . "' AND (transjuego_log.tipo LIKE '%CREDIT%')  AND usuario_mandante.mandante  IN (3,4,5,6,7,10,22,25)
+
+GROUP BY time_dimension4.dbdate1,transaccion_juego.producto_id, transaccion_juego.usuario_id,transaccion_juego.tipo
+ORDER BY time_dimension4.dbdate1,transaccion_juego.producto_id,transaccion_juego.usuario_id,transaccion_juego.tipo;";
+
+
+    $sqlDetalleRollbackCasinoDia = "
+SELECT
+  transaccion_juego.usuario_id usuarioId,
+  transaccion_juego.producto_id producto_id,
+  SUM(transjuego_log.valor) valor,
+  SUM(transjuego_log.valor) valor_premios,
+  date_format(time_dimension4.dbdate1, '%Y-%m-%d') fecha_crea,
+  0 usucrea_id,
+  0 usumodif_id,
+  'A' estado,
+  CASE WHEN transaccion_juego.tipo = 'FREESPIN' THEN 'ROLLBACKFREESPIN' WHEN transaccion_juego.tipo = 'FREECASH' THEN 'ROLLBACKFREECASH' ElSE 'ROLLBACK' END tipo,
+  COUNT(*) cantidad
+      FROM transjuego_log
+                  inner join time_dimension4 force index (time_dimension4_timestampint_dbtimestamp_index)
+                    on (time_dimension4.dbtimestamp = transjuego_log.fecha_crea)
+
+        INNER JOIN transaccion_juego ON (transjuego_log.transjuego_id =transaccion_juego.transjuego_id)
+             INNER JOIN usuario_mandante ON (transaccion_juego.usuario_id = usumandante_id)
+
+    WHERE time_dimension4.dbdate1 = '" . $fechaSoloDia . "' AND (transjuego_log.tipo like '%ROLLBACK%')  AND usuario_mandante.mandante  IN (3,4,5,6,7,10,22,25)
+
+GROUP BY time_dimension4.dbdate1,transaccion_juego.producto_id, transaccion_juego.usuario_id
+ORDER BY time_dimension4.dbdate1,transaccion_juego.producto_id,transaccion_juego.usuario_id;";
+
+
+    $sqlBonoUsuarioCreados = "
+SELECT
+  bono_log.usuario_id usuarioId,
+  SUM(bono_log.valor) valor,
+  date_format(time_dimension4.dbdate1, '%Y-%m-%d') fecha_crea,
+  0 usucrea_id,
+  0 usumodif_id,
+  bono_log.estado estado,
+  bono_log.tipo tipo,
+  COUNT(*) cantidad
+FROM bono_log
+    inner join time_dimension4 force index (time_dimension4_timestr_dbdatetime_index)
+                    on (time_dimension4.timestr = bono_log.fecha_crea)
+
+  INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = bono_log.usuario_id)
+
+    WHERE bono_log.fecha_crea is not null
+  and  time_dimension4.dbdate1 = '" . $fechaSoloDia . "'  AND usuario_perfil.perfil_id = \"USUONLINE\"    AND usuario_perfil.mandante  IN (3,4,5,6,7,10,22,25)
+
+GROUP BY bono_log.tipo,bono_log.estado,time_dimension4.dbdate1, bono_log.usuario_id
+ORDER BY bono_log.usuario_id;";
+
+
+    $sqlUsuarioAjustesDia = "
+SELECT
+  saldo_usuonline_ajuste.usuario_id usuarioId,
+  SUM(saldo_usuonline_ajuste.valor) valor,
+  date_format(time_dimension4.dbdate1, '%Y-%m-%d') fecha_crea,
+  0 usucrea_id,
+  0 usumodif_id,
+  saldo_usuonline_ajuste.tipo_id tipo,
+  COUNT(*) cantidad,
+  tipo tipo_ajuste,
+  proveedor_id proveedor_id
+FROM saldo_usuonline_ajuste
+          inner join time_dimension4 
+                    on (time_dimension4.dbtimestamp = saldo_usuonline_ajuste.fecha_crea)
+  INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = saldo_usuonline_ajuste.usuario_id)
+
+    WHERE  time_dimension4.dbdate1 = '" . $fechaSoloDia . "' AND usuario_perfil.perfil_id = \"USUONLINE\"   AND usuario_perfil.mandante  IN (3,4,5,6,7,10,22,25)
+
+GROUP BY tipo,proveedor_id,saldo_usuonline_ajuste.tipo_id,time_dimension4.dbdate1, saldo_usuonline_ajuste.usuario_id
+ORDER BY saldo_usuonline_ajuste.usuario_id;";
+
+    $sqlUsuarioAjustesDiaPuntoVenta = "
+SELECT
+  cupo_log.usuario_id usuarioId,
+  SUM(cupo_log.valor) valor,
+  date_format(time_dimension4.dbdate1, '%Y-%m-%d') fecha_crea,
+  0 usucrea_id,
+  0 usumodif_id,
+  cupo_log.tipo_id tipo,
+  COUNT(*) cantidad,
+  cupo_log.tipocupo_id tipo_ajuste,
+  0 proveedor_id
+FROM cupo_log
+              inner join time_dimension4
+                    on (time_dimension4.dbdatetime = cupo_log.fecha_crea)
+
+  INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = cupo_log.usuario_id)
+
+    WHERE  time_dimension4.dbdate1 = '" . $fechaSoloDia . "'   AND usuario_perfil.mandante  IN (3,4,5,6,7,10,22,25)
+
+GROUP BY cupo_log.tipocupo_id,tipo,proveedor_id,cupo_log.tipo_id,time_dimension4.dbdate1, cupo_log.usuario_id
+ORDER BY cupo_log.usuario_id;";
+
+    $sqlUsuarioAjustesDiaPuntoVenta2 = "
+SELECT
+  cupo_log.usucrea_id usuarioId,
+  SUM(cupo_log.valor) valor,
+  date_format(time_dimension4.dbdate1, '%Y-%m-%d') fecha_crea,
+  0 usucrea_id,
+  0 usumodif_id,
+  (CASE WHEN cupo_log.tipo_id = 'E' THEN 'S' ELSE 'E' END) tipo,
+  COUNT(*) cantidad,
+  cupo_log.tipocupo_id tipo_ajuste,
+  0 proveedor_id
+FROM cupo_log
+                  inner join time_dimension4 
+                    on (time_dimension4.dbdatetime = cupo_log.fecha_crea)
+
+  INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = cupo_log.usucrea_id)
+
+    WHERE  time_dimension4.dbdate1 = '" . $fechaSoloDia . "'   AND usuario_perfil.mandante  IN (3,4,5,6,7,10,22,25)
+ AND cupo_log.usucrea_id != cupo_log.usuario_id
+GROUP BY cupo_log.tipocupo_id,tipo,proveedor_id,cupo_log.tipo_id,time_dimension4.dbdate1, cupo_log.usucrea_id
+ORDER BY cupo_log.usucrea_id;";
+
+    $UsuarioSaldoInicial = "
+SELECT registro.usuario_id,
+       registro.mandante,
+       DATE_FORMAT(DATE_SUB(now(), INTERVAL 1 DAY), '%Y-%m-%d') fecha,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       registro.creditos,
+       registro.creditos_base
+
+FROM registro;
+";
+
+    $UsuarioSaldoInicialPuntoVenta = "
+SELECT punto_venta.usuario_id,
+       punto_venta.mandante,
+       DATE_FORMAT(DATE_SUB(now(), INTERVAL 1 DAY), '%Y-%m-%d') fecha,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       punto_venta.cupo_recarga,
+       punto_venta.creditos_base
+
+FROM punto_venta;
+";
+
+    $UsuarioSaldoInicialFIX = "
+SELECT usuario_saldo.usuario_id,
+       usuario_saldo.mandante,
+       usuario_saldo.fecha,
+       usuario_saldo.saldo_creditos_final,
+       usuario_saldo.saldo_creditos_base_final,
+       usuario_saldo.saldo_final
+FROM usuario_saldo
+where DATE_FORMAT(fecha, '%Y-%m-%d')   ='" . $fechaSoloDia . "'
+
+";
+
+    $UsuarioSaldoInicialFIX222 = "
+SELECT usuario_saldo.usuario_id,
+       usuario_saldo.mandante,
+       usuario_saldo.fecha,
+       usuario_saldo.saldo_creditos_inicial,
+       usuario_saldo.saldo_creditos_base_inicial,
+       usuario_saldo.saldo_inicial
+FROM usuario_saldo
+where DATE_FORMAT(fecha, '%Y-%m-%d')   ='" . $fechaSoloDia . "'
+
+";
+    $UsuarioSaldoInicialFIX2 = "
+
+
+
+
+SELECT usuario_id,creditos,creditos_base,fecha_crea
+FROM usuario_historial
+WHERE usuhistorial_id IN (
+  SELECT usuario_historial.usuhistorial_id
+  FROM usuario_historial
+         INNER JOIN (
+    SELECT usuhistorial_id,MAX(fecha_crea) fecha,usuario_id
+    FROM usuario_historial
+    WHERE DATE_FORMAT(fecha_crea, '%Y-%m-%d') = '" . $fechaSoloDia . "'
+    GROUP BY usuario_id) data ON (data.usuario_id = usuario_historial.usuario_id AND data.fecha = fecha_crea)
+)
+
+";
+
+
+    $UsuarioSaldoInicialFIX3 = "
+
+
+
+
+SELECT usuario_id,creditos,creditos_base,fecha_crea
+FROM usuario_historial
+WHERE usuhistorial_id IN (
+  SELECT usuario_historial.usuhistorial_id
+  FROM usuario_historial
+         INNER JOIN (
+    SELECT usuhistorial_id,MAX(fecha_crea) fecha,usuario_id
+    FROM usuario_historial
+    WHERE DATE_FORMAT(fecha_crea, '%Y-%m-%d') = '" . $fechaSoloDia . "'
+    GROUP BY usuario_id) data ON (data.usuario_id = usuario_historial.usuario_id AND data.fecha = fecha_crea)
+)
+
+";
+
+    $UsuarioSaldoFinal = "
+SELECT registro.usuario_id,
+       registro.mandante,
+       DATE_FORMAT(DATE_SUB(now(), INTERVAL 0 DAY), '%Y-%m-%d') fecha,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       0,
+       registro.creditos,
+       registro.creditos_base,
+       0,
+       0
+       
+
+FROM registro;
+
+";
+
+
+    $UsuarioSaldoFinalConDetalles = "
+SELECT data.usuario_id,
+       usuario.mandante,
+       DATE_FORMAT(data.fecha, '%Y-%m-%d')                                       fecha,
+
+       SUM(data.saldo_recarga)                                                        saldo_recarga,
+       SUM(data.saldo_apuestas)                                                       saldo_apuestas,
+       SUM(data.saldo_premios)                                                        saldo_premios,
+       SUM(data.saldo_apuestas_casino)                                                saldo_apuestas_casino,
+       SUM(data.saldo_premios_casino)                                                 saldo_premios_casino,
+       SUM(data.saldo_notaret_pagadas)                                                saldo_notaret_pagadas,
+       SUM(data.saldo_notaret_pend)                                                   saldo_notaret_pend,
+       SUM(data.saldo_notaret_creadas)                                                saldo_notaret_creadas,
+       SUM(data.saldo_ajustes_entrada)                                                saldo_ajustes_entrada,
+       SUM(data.saldo_ajustes_salida)                                                 saldo_ajustes_salida,
+       SUM(data.saldo_bono)                                                           saldo_bono,
+       SUM(data.saldo_bono_casino_vivo)                                                           saldo_bono_casino_vivo,
+       SUM(data.saldo_notaret_eliminadas)                                             saldo_notaret_eliminadas,
+       SUM(data.saldo_bono_free_ganado)                                             saldo_bono_free_ganado,
+       0 saldo_inicial,
+       CASE WHEN data2.saldo_inicial IS NULL THEN 0 ELSE data2.saldo_inicial END saldo_final,
+       0 saldo_creditos_inicial,
+       0 saldo_creditos_base_inicial,
+       CASE
+         WHEN data2.saldo_creditos_inicial IS NULL THEN 0
+         ELSE data2.saldo_creditos_inicial END
+                                                                                 saldo_creditos_final,
+       CASE
+         WHEN data2.saldo_creditos_base_inicial IS NULL THEN 0
+         ELSE data2.saldo_creditos_base_inicial END                              saldo_creditos_base_final,
+       data.billetera_id
+FROM (
+       (SELECT usuario_id,
+               SUM(valor)                          saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d') fecha,
+
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               0                                   saldo_apuestas_casino,
+               0                                   saldo_premios_casino,
+               0                                   saldo_notaret_pagadas,
+               0                                   saldo_notaret_pend,
+               0                                   saldo_notaret_creadas,
+               0                                   saldo_ajustes_entrada,
+               0                                   saldo_ajustes_salida,
+               0                                   saldo_bono,
+               0                                   saldo_bono_casino_vivo,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado,
+               0    billetera_id
+        FROM casino.usuario_recarga_resumen
+        WHERE (fecha_crea)   ='" . $fecha1 . "'
+        GROUP BY usuario_id
+       )
+
+
+       UNION
+
+       (SELECT usuario_id,
+               0                                                                   saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d')                                 fecha,
+               SUM(CASE WHEN tipo IN ('BET') THEN valor ELSE -valor END) saldo_apuestas,
+               0                                                                   saldo_premios,
+               0                                                                   saldo_apuestas_casino,
+               0                                                                   saldo_premios_casino,
+               0                                                                   saldo_notaret_pagadas,
+               0                                                                   saldo_notaret_pend,
+               0                                                                   saldo_notaret_creadas,
+               0                                                                   saldo_ajustes_entrada,
+               0                                                                   saldo_ajustes_salida,
+               0                                                                   saldo_bono,
+               0                                   saldo_bono_casino_vivo,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado,
+               0    billetera_id
+        FROM casino.usuario_deporte_resumen
+        WHERE tipo IN ('BET', 'STAKEDECREASE', 'REFUND') AND  (fecha_crea)   ='" . $fecha1 . "'
+        GROUP BY usuario_id
+       )
+       UNION
+
+       (SELECT usuario_id,
+               0                                                                                 saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d')                                               fecha,
+               0                                                                                 saldo_apuestas,
+               SUM(CASE WHEN tipo IN ('WIN', 'NEWCREDIT', 'CASHOUT') THEN valor ELSE -valor END) saldo_premios,
+               0                                                                                 saldo_apuestas_casino,
+               0                                                                                 saldo_premios_casino,
+               0                                                                                 saldo_notaret_pagadas,
+               0                                                                                 saldo_notaret_pend,
+               0                                                                                 saldo_notaret_creadas,
+               0                                                                                 saldo_ajustes_entrada,
+               0                                                                                 saldo_ajustes_salida,
+               0                                                                                 saldo_bono,
+               0                                   saldo_bono_casino_vivo,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado,
+               0    billetera_id
+        FROM casino.usuario_deporte_resumen
+        WHERE tipo IN ('WIN', 'NEWCREDIT', 'CASHOUT', 'NEWDEBIT') AND  (fecha_crea)   ='" . $fecha1 . "'
+        GROUP BY usuario_id)
+
+       UNION
+
+       (SELECT usuario_mandante,
+               0                                   saldo_recarga,
+               DATE_FORMAT(usuario_casino_resumen.fecha_crea, '%Y-%m-%d') fecha,
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               SUM(valor+valor_premios)                          saldo_apuestas_casino,
+               0                                   saldo_premios_casino,
+               0                                   saldo_notaret_pagadas,
+               0                                   saldo_notaret_pend,
+               0                                   saldo_notaret_creadas,
+               0                                   saldo_ajustes_entrada,
+               0                                   saldo_ajustes_salida,
+               0                                   saldo_bono,
+               0                                   saldo_bono_casino_vivo,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado,
+               0    billetera_id
+        FROM casino.usuario_casino_resumen
+                                 INNER JOIN usuario_mandante ON (usumandante_id=usuario_id)
+        WHERE tipo IN ('1','4','6') AND  (usuario_casino_resumen.fecha_crea)   ='" . $fecha1 . "'
+        GROUP BY usuario_id
+       )
+
+       UNION
+       (
+         SELECT usuario_mandante,
+                0                                   saldo_recarga,
+                DATE_FORMAT(usuario_casino_resumen.fecha_crea, '%Y-%m-%d') fecha,
+                0                                   saldo_apuestas,
+                0                                   saldo_premios,
+                0                                   saldo_apuestas_casino,
+                SUM(valor)                          saldo_premios_casino,
+                0                                   saldo_notaret_pagadas,
+                0                                   saldo_notaret_pend,
+                0                                   saldo_notaret_creadas,
+                0                                   saldo_ajustes_entrada,
+                0                                   saldo_ajustes_salida,
+                0                                   saldo_bono,
+               0                                   saldo_bono_casino_vivo,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado,
+               0    billetera_id
+         FROM casino.usuario_casino_resumen
+                         INNER JOIN usuario_mandante ON (usumandante_id=usuario_id)
+
+         WHERE tipo IN ('2','5','7') AND  (usuario_casino_resumen.fecha_crea)   ='" . $fecha1 . "'
+         GROUP BY usuario_id
+       )
+
+       UNION
+
+       (SELECT usuario_id,
+               0                                   saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d') fecha,
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               0                                   saldo_apuestas_casino,
+               0                                   saldo_premios_casino,
+               SUM(valor)                          saldo_notaret_pagadas,
+               0                                   saldo_notaret_pend,
+               0                                   saldo_notaret_creadas,
+               0                                   saldo_ajustes_entrada,
+               0                                   saldo_ajustes_salida,
+               0                                   saldo_bono,
+               0                                   saldo_bono_casino_vivo,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado,
+               0    billetera_id
+        FROM casino.usuario_retiro_resumen
+        WHERE estado = 'I' AND  (usuario_retiro_resumen.fecha_crea)   ='" . $fecha1 . "'
+        GROUP BY usuario_id
+       )
+
+       UNION
+
+       (SELECT usuario_id,
+               0                                   saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d') fecha,
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               0                                   saldo_apuestas_casino,
+               0                                   saldo_premios_casino,
+               -SUM(valor)                          saldo_notaret_pagadas,
+               0                                   saldo_notaret_pend,
+               0                                   saldo_notaret_creadas,
+               0                                   saldo_ajustes_entrada,
+               0                                   saldo_ajustes_salida,
+               0                                   saldo_bono,
+               0                                   saldo_bono_casino_vivo,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado,
+               0    billetera_id
+        FROM casino.usuario_retiro_resumen
+        WHERE estado = 'D' AND  (usuario_retiro_resumen.fecha_crea)   ='" . $fecha1 . "'
+        GROUP BY usuario_id
+       )
+       UNION
+
+       (SELECT usuario_id,
+               0                                   saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d') fecha,
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               0                                   saldo_apuestas_casino,
+               0                                   saldo_premios_casino,
+               0                                   saldo_notaret_pagadas,
+               SUM(valor)                          saldo_notaret_pend,
+               0                                   saldo_notaret_creadas,
+               0                                   saldo_ajustes_entrada,
+               0                                   saldo_ajustes_salida,
+               0                                   saldo_bono,
+               0                                   saldo_bono_casino_vivo,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado,
+               0    billetera_id
+        FROM casino.usuario_retiro_resumen
+        WHERE estado = 'P' AND  (usuario_retiro_resumen.fecha_crea)   ='" . $fecha1 . "'
+        GROUP BY usuario_id
+       )
+       UNION
+
+       (SELECT usuario_id,
+               0                                   saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d') fecha,
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               0                                   saldo_apuestas_casino,
+               0                                   saldo_premios_casino,
+               0                                   saldo_notaret_pagadas,
+               0                                   saldo_notaret_pend,
+               SUM(valor)                          saldo_notaret_creadas,
+               0                                   saldo_ajustes_entrada,
+               0                                   saldo_ajustes_salida,
+               0                                   saldo_bono,
+               0                                   saldo_bono_casino_vivo,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado,
+               0    billetera_id
+        FROM casino.usuario_retiro_resumen
+        WHERE estado = 'A' AND  (fecha_crea)   ='" . $fecha1 . "'
+        GROUP BY usuario_id
+       )
+
+       UNION
+
+       (SELECT usuario_id,
+               0                                   saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d') fecha,
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               0                                   saldo_apuestas_casino,
+               0                                   saldo_premios_casino,
+               0                                   saldo_notaret_pagadas,
+               0                                   saldo_notaret_pend,
+               0                                   saldo_notaret_creadas,
+
+               SUM(valor)                          saldo_ajustes_entrada,
+               0                                   saldo_ajustes_salida,
+               0                                   saldo_bono,
+               0                                   saldo_bono_casino_vivo,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado,
+               0    billetera_id
+        FROM casino.usuario_ajustes_resumen
+        WHERE tipo = 'E' AND  DATE_FORMAT(fecha_crea, '%Y-%m-%d')   ='" . $fechaSoloDia . "'
+        GROUP BY usuario_id
+       )
+       UNION
+
+       (SELECT usuario_id,
+               0                                   saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d') fecha,
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               0                                   saldo_apuestas_casino,
+               0                                   saldo_premios_casino,
+               0                                   saldo_notaret_pagadas,
+               0                                   saldo_notaret_pend,
+               0                                   saldo_notaret_creadas,
+               0                                   saldo_ajustes_entrada,
+               SUM(valor)                          saldo_ajustes_salida,
+               0                                   saldo_bono,
+               0                                   saldo_bono_casino_vivo,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado,
+               0    billetera_id
+        FROM casino.usuario_ajustes_resumen
+        WHERE tipo = 'S' AND  DATE_FORMAT(fecha_crea, '%Y-%m-%d')   ='" . $fechaSoloDia . "'
+        GROUP BY usuario_id
+       )
+
+       UNION
+
+       (SELECT usuario_id,
+               0                                                    saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d')                  fecha,
+               0                                                    saldo_apuestas,
+               0                                                    saldo_premios,
+               0                                                    saldo_apuestas_casino,
+               0                                                    saldo_premios_casino,
+               0                                                    saldo_notaret_pagadas,
+               0                                                    saldo_notaret_pend,
+               0                                                    saldo_notaret_creadas,
+               0                                                    saldo_ajustes_entrada,
+               0                                                    saldo_ajustes_salida,
+               SUM(CASE when (estado = 'L' AND (tipo NOT IN ('FC','TC','SC','SCV','SL','TL','TV'))) then valor when (estado = 'E' AND (tipo NOT IN ('FC','TC','SC','SCV','TL','TV'))) then -valor else 0 end) saldo_bono,
+               SUM(CASE when (estado = 'L' AND (tipo IN ('FC','TC','SC','SCV','SL','TL','TV'))) then valor when (estado = 'E' AND (tipo IN ('FC','TC','SC','SCV','TL','TV'))) then -valor else 0 end) saldo_bono_casino_vivo,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado,
+               0    billetera_id
+        FROM casino.usuario_bono_resumen
+        WHERE DATE_FORMAT(fecha_crea, '%Y-%m-%d')   ='" . $fechaSoloDia . "'
+        GROUP BY usuario_id
+       )
+       
+
+       UNION
+
+        (SELECT usuario_id,
+               0                                   saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d') fecha,
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               0                                   saldo_apuestas_casino,
+               0                                   saldo_premios_casino,
+               0                                   saldo_notaret_pagadas,
+               0                                   saldo_notaret_pend,
+               0                          saldo_notaret_creadas,
+               0                                   saldo_ajustes_entrada,
+               0                                   saldo_ajustes_salida,
+               0                                   saldo_bono,
+               0                                   saldo_bono_casino_vivo,
+               SUM(valor)                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado,
+               0    billetera_id
+        FROM casino.usuario_retiro_resumen
+        WHERE (estado = 'R' OR estado = 'E' OR estado = 'D') AND  (fecha_crea)   ='" . $fecha1 . "'
+        GROUP BY usuario_id
+       )
+
+       UNION
+
+       (SELECT usuario_id,
+               0                                                    saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d')                  fecha,
+               0                                                    saldo_apuestas,
+               0                                                    saldo_premios,
+               0                                                    saldo_apuestas_casino,
+               0                                                    saldo_premios_casino,
+               0                                                    saldo_notaret_pagadas,
+               0                                                    saldo_notaret_pend,
+               0                                                    saldo_notaret_creadas,
+               0                                                    saldo_ajustes_entrada,
+               0                                                    saldo_ajustes_salida,
+               0 saldo_bono,
+               0                                   saldo_bono_casino_vivo,
+               0                                   saldo_notaret_eliminadas,
+               SUM(CASE when tipo = 'W' then valor else 0 end)  saldo_bono_free_ganado,
+               0    billetera_id
+        FROM casino.usuario_bono_resumen
+        WHERE DATE_FORMAT(fecha_crea, '%Y-%m-%d')   ='" . $fecha1 . "'
+        GROUP BY usuario_id
+       )
+       
+     ) data
+     INNER JOIN usuario ON (data.usuario_id = usuario.usuario_id)
+     INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = usuario.usuario_id)
+    LEFT OUTER JOIN usuario_saldo_".date("Y_m_d")." as data2 on (data.usuario_id = data2.usuario_id)
+
+WHERE data.usuario_id IS NOT NULL AND usuario_perfil.perfil_id = 'USUONLINE'
+  AND data.fecha = '" . $fechaSoloDia . "'    AND usuario_perfil.mandante  IN (3,4,5,6,7,10,22,25)
+
+GROUP BY data.usuario_id,data.billetera_id;
+
+";
+
+
+    $UsuarioPuntoVentaFinalConDetalles = "
+SELECT data.usuario_id,
+       usuario.mandante,
+       DATE_FORMAT(data.fecha, '%Y-%m-%d')                                       fecha,
+
+       SUM(data.saldo_recarga)                                                        saldo_recarga,
+       SUM(data.saldo_apuestas)                                                       saldo_apuestas,
+       SUM(data.saldo_premios)                                                        saldo_premios,
+       SUM(data.saldo_apuestas_casino)                                                saldo_apuestas_casino,
+       SUM(data.saldo_premios_casino)                                                 saldo_premios_casino,
+       SUM(data.saldo_notaret_pagadas)                                                saldo_notaret_pagadas,
+       SUM(data.saldo_notaret_pend)                                                   saldo_notaret_pend,
+       SUM(data.saldo_notaret_creadas)                                                saldo_notaret_creadas,
+       SUM(data.saldo_ajustes_entrada)                                                saldo_ajustes_entrada,
+       SUM(data.saldo_ajustes_salida)                                                 saldo_ajustes_salida,
+       SUM(data.saldo_bono)                                                           saldo_bono,
+       SUM(data.saldo_notaret_eliminadas)                                             saldo_notaret_eliminadas,
+       SUM(data.saldo_bono_free_ganado)                                             saldo_bono_free_ganado,
+       0 saldo_inicial,
+       CASE WHEN data2.saldo_inicial IS NULL THEN 0 ELSE data2.saldo_inicial END saldo_final,
+       0 saldo_creditos_inicial,
+       0 saldo_creditos_base_inicial,
+       CASE
+         WHEN data2.saldo_creditos_inicial IS NULL THEN 0
+         ELSE data2.saldo_creditos_inicial END
+                                                                                 saldo_creditos_final,
+       CASE
+         WHEN data2.saldo_creditos_base_inicial IS NULL THEN 0
+         ELSE data2.saldo_creditos_base_inicial END                              saldo_creditos_base_final
+FROM (
+       (SELECT usuario_id,
+               SUM(valor)                          saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d') fecha,
+
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               0                                   saldo_apuestas_casino,
+               0                                   saldo_premios_casino,
+               0                                   saldo_notaret_pagadas,
+               0                                   saldo_notaret_pend,
+               0                                   saldo_notaret_creadas,
+               0                                   saldo_ajustes_entrada,
+               0                                   saldo_ajustes_salida,
+               0                                   saldo_bono,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado
+        FROM casino.usuario_recarga_resumen
+        WHERE (fecha_crea)   ='" . $fecha1 . "' AND estado='A'
+        GROUP BY usuario_id
+       )
+       UNION
+        
+        (SELECT usuario_id,
+               0                         saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d') fecha,
+
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               0                                   saldo_apuestas_casino,
+               0                                   saldo_premios_casino,
+               0                                   saldo_notaret_pagadas,
+               0                                   saldo_notaret_pend,
+               0                                   saldo_notaret_creadas,
+               0                                   saldo_ajustes_entrada,
+               0                                   saldo_ajustes_salida,
+               0                                   saldo_bono,
+               SUM(valor)                                    saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado
+        FROM casino.usuario_recarga_resumen
+        WHERE (fecha_crea)   ='" . $fecha1 . "' AND estado='I'
+        GROUP BY usuario_id
+       )
+
+       UNION
+
+       (SELECT usuario_id,
+               0                                                                   saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d')                                 fecha,
+               SUM(valor) saldo_apuestas,
+               0                                                                   saldo_premios,
+               0                                                                   saldo_apuestas_casino,
+               0                                                                   saldo_premios_casino,
+               0                                                                   saldo_notaret_pagadas,
+               0                                                                   saldo_notaret_pend,
+               0                                                                   saldo_notaret_creadas,
+               0                                                                   saldo_ajustes_entrada,
+               0                                                                   saldo_ajustes_salida,
+               0                                                                   saldo_bono,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado
+        FROM casino.usuario_deporte_resumen
+        WHERE tipo ='1' AND  (fecha_crea)   ='" . $fecha1 . "'
+        GROUP BY usuario_id
+       )
+       UNION
+
+       (SELECT usuario_id,
+               0                                                                                 saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d')                                               fecha,
+               0                                                                                 saldo_apuestas,
+               SUM(valor) saldo_premios,
+               0                                                                                 saldo_apuestas_casino,
+               0                                                                                 saldo_premios_casino,
+               0                                                                                 saldo_notaret_pagadas,
+               0                                                                                 saldo_notaret_pend,
+               0                                                                                 saldo_notaret_creadas,
+               0                                                                                 saldo_ajustes_entrada,
+               0                                                                                 saldo_ajustes_salida,
+               0                                                                                 saldo_bono,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado
+        FROM casino.usuario_deporte_resumen
+        WHERE tipo = '3'   AND  (fecha_crea)   ='" . $fecha1 . "'
+        GROUP BY usuario_id)
+
+       UNION
+
+       (SELECT usuario_id,
+               0                                   saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d') fecha,
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               0                                   saldo_apuestas_casino,
+               0                                   saldo_premios_casino,
+               SUM(valor)                          saldo_notaret_pagadas,
+               0                                   saldo_notaret_pend,
+               0                                   saldo_notaret_creadas,
+               0                                   saldo_ajustes_entrada,
+               0                                   saldo_ajustes_salida,
+               0                                   saldo_bono,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado
+        FROM casino.usuario_retiro_resumen
+        WHERE estado = 'I' AND  (usuario_retiro_resumen.fecha_crea)   ='" . $fecha1 . "'
+        GROUP BY usuario_id
+       )
+       
+       
+       UNION
+
+       (SELECT usuario_id,
+               0                                   saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d') fecha,
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               0                                   saldo_apuestas_casino,
+               0                                   saldo_premios_casino,
+               0                                   saldo_notaret_pagadas,
+               0                                   saldo_notaret_pend,
+               0                                   saldo_notaret_creadas,
+
+               SUM(valor)                          saldo_ajustes_entrada,
+               0                                   saldo_ajustes_salida,
+               0                                   saldo_bono,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado
+        FROM casino.usuario_ajustes_resumen
+        WHERE tipo = 'E' AND tipo_ajuste = 'R' AND  DATE_FORMAT(fecha_crea, '%Y-%m-%d')   ='" . $fechaSoloDia . "'
+        GROUP BY usuario_id
+       )
+       UNION
+
+       (SELECT usuario_id,
+               0                                   saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d') fecha,
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               0                                   saldo_apuestas_casino,
+               0                                   saldo_premios_casino,
+               0                                   saldo_notaret_pagadas,
+               0                                   saldo_notaret_pend,
+               0                                   saldo_notaret_creadas,
+               0                                   saldo_ajustes_entrada,
+               SUM(valor)                          saldo_ajustes_salida,
+               0                                   saldo_bono,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado
+        FROM casino.usuario_ajustes_resumen
+        WHERE tipo = 'S' AND tipo_ajuste = 'R' AND  (fecha_crea)   ='" . $fecha1 . "'
+        GROUP BY usuario_id
+       )
+       
+       
+       
+       UNION
+
+       (SELECT usuario_id,
+               0                                   saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d') fecha,
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               0                                   saldo_apuestas_casino,
+               SUM(valor)                                   saldo_premios_casino,
+               0                                   saldo_notaret_pagadas,
+               0                                   saldo_notaret_pend,
+               0                                   saldo_notaret_creadas,
+
+               0                         saldo_ajustes_entrada,
+               0                                   saldo_ajustes_salida,
+               0                                   saldo_bono,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado
+        FROM casino.usuario_ajustes_resumen
+        WHERE tipo = 'E' AND tipo_ajuste = 'A' AND (fecha_crea)   ='" . $fecha1 . "'
+        GROUP BY usuario_id
+       )
+       UNION
+
+       (SELECT usuario_id,
+               0                                   saldo_recarga,
+               DATE_FORMAT(fecha_crea, '%Y-%m-%d') fecha,
+               0                                   saldo_apuestas,
+               0                                   saldo_premios,
+               SUM(valor)                                   saldo_apuestas_casino,
+               0                                   saldo_premios_casino,
+               0                                   saldo_notaret_pagadas,
+               0                                   saldo_notaret_pend,
+               0                                   saldo_notaret_creadas,
+               0                                   saldo_ajustes_entrada,
+               0                          saldo_ajustes_salida,
+               0                                   saldo_bono,
+               0                                   saldo_notaret_eliminadas,
+               0                                   saldo_bono_free_ganado
+        FROM casino.usuario_ajustes_resumen
+        WHERE tipo = 'S' AND tipo_ajuste = 'A' AND  (fecha_crea)   ='" . $fecha1 . "'
+        GROUP BY usuario_id
+       )
+       
+     ) data
+     INNER JOIN usuario ON (data.usuario_id = usuario.usuario_id)
+     INNER JOIN usuario_perfil ON (usuario_perfil.usuario_id = usuario.usuario_id)
+    LEFT OUTER JOIN usuario_saldo_".date("Y_m_d")." as data2 on (data.usuario_id = data2.usuario_id)
+
+WHERE data.usuario_id IS NOT NULL AND usuario_perfil.perfil_id != 'USUONLINE'    AND usuario_perfil.mandante  IN (3,4,5,6,7,10,22,25)
+  AND data.fecha = '" . $fechaSoloDia . "'
+
+GROUP BY data.usuario_id;
+
+";
+
+    $SelectTicketExpirados = "
+
+SELECT ticket_id
+FROM it_ticket_enc
+WHERE premiado='S' and premio_pagado='N'  and  date(now()) > date(fecha_maxpago)
+
+";
+    $log = "\r\n" . "-------------------------" . "\r\n";
+    $log = $log . "Inicia: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+    fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+
+
+    $log = "\r\n" . "-------------------------" . "\r\n";
+    $log = $log . "Inicia: " . $UsuarioSaldoFinal . " - " . date('Y-m-d H:i:s');
+    fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+
+
+    $paso = true;
+    ini_set('mysql.connect_timeout', 3000);
+    ini_set('default_socket_timeout', 3000);
+
+    if(true) {
+
+        $BonoInterno = new BonoInterno();
+        $BonoDetalleMySqlDAO = new BonoDetalleMySqlDAO();
+        $transaccion = $BonoDetalleMySqlDAO->getTransaction();
+        $transaccion->getConnection()->beginTransaction();
+
+
+        //$BonoInterno->execQuery($transaccion, $strEliminado);
+
+       // $BonoInterno->execQuery($transaccion, "set session wait_timeout=3000");
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "Eliminado: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+        print_r($sqlRecargaUsuarioDia);
+
+        $data = $BonoInterno->execQuery('', $sqlRecargaUsuarioDia);
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_recarga_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, cantidad,mediopago_id,puntoventa_id)
+              VALUES ('" . $datanum->{'usuario_recarga.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.cantidad'} . "','" . $datanum->{'.mediopago_id'} . "','" . $datanum->{'usuario_recarga.puntoventa_id'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "RecargaUsuarioDia: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+        $data = $BonoInterno->execQuery('', $sqlRecargaPuntoVentaDia);
+
+        foreach ($data as $datanum) {
+
+            $sql = "INSERT INTO usuario_recarga_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, cantidad)
+              VALUES ('" . $datanum->{'.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "RecargaPuntoVentaDia: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+        $data = $BonoInterno->execQuery('', $sqlRecargaPasarelaDia);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_recarga_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, cantidad,mediopago_id)
+              VALUES ('" . $datanum->{'usuario_recarga.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.cantidad'} . "','" . $datanum->{'transaccion_producto.mediopago_id'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "RecargaPasarelaDia: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+        $data = $BonoInterno->execQuery('', $sqlRetiroUsuarioDiaPagado);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_retiro_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, cantidad,puntoventa_id)
+              VALUES ('" . $datanum->{'cuenta_cobro.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.cantidad'} . "','" . $datanum->{'cuenta_cobro.puntoventa_id'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "RetiroUsuarioDiaPagado: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+        $data = $BonoInterno->execQuery('', $sqlRetiroUsuarioDiaPagadoCuentaBancariaFisicamente);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_retiro_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, cantidad,puntoventa_id)
+              VALUES ('" . $datanum->{'cuenta_cobro.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.cantidad'} . "','0')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "RetiroUsuarioDiaPagado: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+        $data = $BonoInterno->execQuery('', $sqlRetiroUsuarioDiaPendiente);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_retiro_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, cantidad)
+              VALUES ('" . $datanum->{'cuenta_cobro.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "RetiroUsuarioDiaPendiente: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+        $data = $BonoInterno->execQuery('', $sqlRetiroUsuarioDiaEliminadas);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_retiro_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, cantidad)
+              VALUES ('" . $datanum->{'cuenta_cobro.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "RetiroUsuarioDiaEliminadas: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+
+        $data = $BonoInterno->execQuery('', $sqlRetiroUsuarioDiaDevueltas);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_retiro_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, cantidad)
+              VALUES ('" . $datanum->{'cuenta_cobro.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "RetiroUsuarioDiaEliminadas: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+        $data = $BonoInterno->execQuery('', $sqlRetiroUsuarioDiaRechazadas);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_retiro_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, cantidad)
+              VALUES ('" . $datanum->{'cuenta_cobro.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "RetiroUsuarioDiaRechazadas: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+
+        $data = $BonoInterno->execQuery('', $sqlRetiroPuntoVentaDiaPagado);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_retiro_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, cantidad)
+              VALUES ('" . $datanum->{'cuenta_cobro.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "RetiroPuntoVentaDiaPagado: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+        $data = $BonoInterno->execQuery('', $sqlRetiroUsuarioPendienteHoy);
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_retiro_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, cantidad)
+              VALUES ('" . $datanum->{'cuenta_cobro.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "sqlRetiroUsuarioPendienteHoy: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+        $data = $BonoInterno->execQuery('', $sqlRetiroProductosPagado);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_retiro_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, cantidad,producto_id)
+              VALUES ('" . $datanum->{'cuenta_cobro.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.cantidad'} . "','" . $datanum->{'transaccion_producto.producto_id'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "sqlRetiroProductosPagado: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+
+            $data = $BonoInterno->execQuery('', $sqlApuestasDeportivasUsuarioDia);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_deporte_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+              VALUES ('" . $datanum->{'it_transaccion.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'it_transaccion.tipo'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+            $data = $BonoInterno->execQuery('', $sqlApuestasDeportivasUsuarioDiaFECHACIERREBET);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_deporte_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+              VALUES ('" . $datanum->{'it_transaccion.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.tipo'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "ApuestasDeportivasUsuarioDia: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+        /*$BonoInterno->execQuery($transaccion,$sqlPremiosDeportivasUsuarioDia);
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log ."PremiosDeportivasUsuarioDia: ".$fechaSoloDia ." - ". date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");*/
+
+        $data = $BonoInterno->execQuery('', $sqlApuestasDeportivasPuntoVentaDia);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_deporte_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+              VALUES ('" . $datanum->{'.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.tipo'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $data = $BonoInterno->execQuery('', $sqlApuestasDeportivasPuntoVentaoDiaCierre);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_deporte_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+              VALUES ('" . $datanum->{'.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.tipo'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "ApuestasDeportivasPuntoVentaDia: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+        $data = $BonoInterno->execQuery('', $sqlPremiosDeportivasPuntoVentaoDia);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_deporte_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+              VALUES ('" . $datanum->{'.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.tipo'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "PremiosDeportivasPuntoVentaDia: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+        $data = $BonoInterno->execQuery('', $sqlPremiosPagadosDeportivasPuntoVentaoDia);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_deporte_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+              VALUES ('" . $datanum->{'.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.tipo'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "PremiosPagadosDeportivasPuntoVentaoDia: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+
+        $data = $BonoInterno->execQuery('', $sqlApuestasCasinoDia);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_casino_resumen (usuario_id, valor,valor_premios, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+              VALUES ('" . $datanum->{'transaccion_juego.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.valor_premios'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.tipo'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "ApuestasCasinoDia: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+        $data = $BonoInterno->execQuery('', $sqlPremiosCasinoDia);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_casino_resumen (usuario_id, valor,valor_premios, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+              VALUES ('" . $datanum->{'transaccion_juego.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.valor_premios'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.tipo'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "PremiosCasinoDia: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+
+        $data = $BonoInterno->execQuery('', $sqlDetalleApuesCasinoDia);
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usucasino_detalle_resumen (usuario_id, producto_id, valor,valor_premios, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+              VALUES ('" . $datanum->{'transaccion_juego.usuarioId'} . "','" . $datanum->{'transaccion_juego.producto_id'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.valor_premios'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.tipo'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "DetalleApuesCasinoDia: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+
+        $data = $BonoInterno->execQuery('', $sqlDetallePremiosCasinoDia);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usucasino_detalle_resumen (usuario_id, producto_id, valor,valor_premios, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+              VALUES ('" . $datanum->{'transaccion_juego.usuarioId'} . "','" . $datanum->{'transaccion_juego.producto_id'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.valor_premios'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.tipo'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "DetallePremiosCasinoDia: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+
+        $data = $BonoInterno->execQuery('', $sqlDetalleRollbackCasinoDia);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usucasino_detalle_resumen (usuario_id, producto_id, valor,valor_premios, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+              VALUES ('" . $datanum->{'transaccion_juego.usuarioId'} . "','" . $datanum->{'transaccion_juego.producto_id'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.valor_premios'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.estado'} . "','" . $datanum->{'.tipo'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "DetalleRollbackCasinoDia: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+
+        $data = $BonoInterno->execQuery('', $sqlBonoUsuarioCreados);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_bono_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, estado, tipo, cantidad)
+              VALUES ('" . $datanum->{'bono_log.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'bono_log.estado'} . "','" . $datanum->{'bono_log.tipo'} . "','" . $datanum->{'.cantidad'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "BonoUsuarioCreados: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+
+        $data = $BonoInterno->execQuery('', $sqlUsuarioAjustesDia);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_ajustes_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, tipo, cantidad,tipo_ajuste,proveedor_id)
+              VALUES ('" . $datanum->{'saldo_usuonline_ajuste.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'saldo_usuonline_ajuste.tipo'} . "','" . $datanum->{'.cantidad'} . "','" . $datanum->{'saldo_usuonline_ajuste.tipo_ajuste'} . "','" . $datanum->{'saldo_usuonline_ajuste.proveedor_id'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "UsuarioAjustesDia: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+
+        $data = $BonoInterno->execQuery('', $sqlUsuarioAjustesDiaPuntoVenta);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_ajustes_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, tipo, cantidad,tipo_ajuste,proveedor_id)
+              VALUES ('" . $datanum->{'cupo_log.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'cupo_log.tipo'} . "','" . $datanum->{'.cantidad'} . "','" . $datanum->{'cupo_log.tipo_ajuste'} . "','" . $datanum->{'.proveedor_id'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+
+        $data = $BonoInterno->execQuery('', $sqlUsuarioAjustesDiaPuntoVenta2);
+
+
+        foreach ($data as $datanum) {
+            $sql = "INSERT INTO usuario_ajustes_resumen (usuario_id, valor, fecha_crea, usucrea_id, usumodif_id, tipo, cantidad,tipo_ajuste,proveedor_id)
+              VALUES ('" . $datanum->{'cupo_log.usuarioId'} . "','" . $datanum->{'.valor'} . "','" . $datanum->{'.fecha_crea'} . "','" . $datanum->{'.usucrea_id'} . "','" . $datanum->{'.usumodif_id'} . "','" . $datanum->{'.tipo'} . "','" . $datanum->{'.cantidad'} . "','" . $datanum->{'cupo_log.tipo_ajuste'} . "','" . $datanum->{'.proveedor_id'} . "')";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "UsuarioCupoLogDia: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+
+        $BonoInterno->execQuery($transaccion, "UPDATE bono_interno SET estado='I' WHERE fecha_fin <= now() AND estado='A';");
+
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "Inactivacion Bonos: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+        print_r("PASO");
+
+        /*  $sqlExpirados = "UPDATE usuario_bono, registro, bono_detalle
+      SET usuario_bono.estado = 'E', registro.creditos_bono = registro.creditos_bono - usuario_bono.valor
+      WHERE usuario_bono.usuario_id = registro.usuario_id AND (usuario_bono.bono_id = bono_detalle.bono_id AND
+                                                               (bono_detalle.tipo = 'EXPDIA' OR
+                                                                bono_detalle.tipo = 'EXPFECHA')) AND usuario_bono.estado = 'A'
+            AND
+            (CASE WHEN bono_detalle.tipo = 'EXPDIA'
+              THEN now() > DATE_ADD(usuario_bono.fecha_crea, INTERVAL bono_detalle.valor DAY)
+             ELSE now() > bono_detalle.valor END
+            )
+      ";
+          $BonoInterno->execQuery($transaccion, $sqlExpirados);*/
+        //$procesoInterno=$BonoInterno->execQuery($transaccion, "INSERT INTO procesos_internos ( tipo, fecha_crea, usucrea_id) VALUES ('ResumenesPaso2-6AM','".date("Y-m-d 00:00:00")."','0');");
+
+        $transaccion->commit();
+
+
+        $BonoInterno = new BonoInterno();
+        $BonoDetalleMySqlDAO = new BonoDetalleMySqlDAO();
+        $transaccion = $BonoDetalleMySqlDAO->getTransaction();
+        $transaccion->getConnection()->beginTransaction();
+
+
+        $data = $BonoInterno->execQuery('', $SelectTicketExpirados);
+
+
+        foreach ($data as $datanum) {
+            $sql = "  UPDATE it_ticket_enc SET estado='E' WHERE ticket_id='" . $datanum->{'it_ticket_enc.ticket_id'} . "' ";
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+
+        $transaccion->commit();
+    }
+    $BonoInterno = new BonoInterno();
+
+    $data = $BonoInterno->execQuery('', $UsuarioSaldoFinalConDetalles);
+
+
+    foreach ($data as $datanum) {
+        $BonoDetalleMySqlDAO = new BonoDetalleMySqlDAO();
+        $transaccion = $BonoDetalleMySqlDAO->getTransaction();
+        $transaccion->getConnection()->beginTransaction();
+        $sql = "INSERT INTO   ".$nameTable."  (usuario_id, mandante, fecha, saldo_recarga, saldo_apuestas, saldo_premios,
+                           saldo_apuestas_casino, saldo_premios_casino, saldo_notaret_pagadas,
+                           saldo_notaret_pend, saldo_notaret_creadas, saldo_ajustes_entrada, saldo_ajustes_salida,
+                           saldo_inicial, saldo_final, saldo_bono,saldo_bono_casino_vivo, saldo_creditos_inicial, saldo_creditos_base_inicial,
+                           saldo_creditos_final, saldo_creditos_base_final,saldo_notaret_eliminadas,saldo_bono_free_ganado,billetera_id) VALUES (
+                           '" . $datanum->{'data.usuario_id'} . "',
+                           '" . $datanum->{'usuario.mandante'} . "',
+                           '" . $datanum->{'.fecha'} . "',
+                           '" . $datanum->{'.saldo_recarga'} . "',
+                           '" . $datanum->{'.saldo_apuestas'} . "',
+                           '" . $datanum->{'.saldo_premios'} . "',
+                           '" . $datanum->{'.saldo_apuestas_casino'} . "',
+                           '" . $datanum->{'.saldo_premios_casino'} . "',
+                           '" . $datanum->{'.saldo_notaret_pagadas'} . "',
+                           '" . $datanum->{'.saldo_notaret_pend'} . "',
+                           '" . $datanum->{'.saldo_notaret_creadas'} . "',
+                           '" . $datanum->{'.saldo_ajustes_entrada'} . "',
+                           '" . $datanum->{'.saldo_ajustes_salida'} . "',
+                           '" . $datanum->{'.saldo_inicial'} . "',
+                           '" . $datanum->{'.saldo_final'} . "',
+                           '" . $datanum->{'.saldo_bono'} . "',
+                           '" . $datanum->{'.saldo_bono_casino_vivo'} . "',
+                           '" . $datanum->{'.saldo_creditos_inicial'} . "',
+                           '" . $datanum->{'.saldo_creditos_base_inicial'} . "',
+                           '" . $datanum->{'.saldo_creditos_final'} . "',
+                           '" . $datanum->{'.saldo_creditos_base_final'} . "',
+                           '" . $datanum->{'.saldo_notaret_eliminadas'} . "',
+                           '" . $datanum->{'.saldo_bono_free_ganado'} . "',
+                           '" . $datanum->{'data.billetera_id'} . "'
+                                 )
+       
+       
+ON DUPLICATE KEY UPDATE   ".$nameTable.".saldo_recarga      = '" . $datanum->{'.saldo_recarga'} . "',
+                           ".$nameTable.".saldo_apuestas      = '" . $datanum->{'.saldo_apuestas'} . "',
+                           ".$nameTable.".saldo_premios      = '" . $datanum->{'.saldo_premios'} . "',
+                           ".$nameTable.".saldo_apuestas_casino      = '" . $datanum->{'.saldo_apuestas_casino'} . "',
+                           ".$nameTable.".saldo_premios_casino      = '" . $datanum->{'.saldo_premios_casino'} . "',
+                           ".$nameTable.".saldo_notaret_pagadas      = '" . $datanum->{'.saldo_notaret_pagadas'} . "',
+                           ".$nameTable.".saldo_notaret_pend      = '" . $datanum->{'.saldo_notaret_pend'} . "',
+                           ".$nameTable.".saldo_notaret_creadas      = '" . $datanum->{'.saldo_notaret_creadas'} . "',
+                           ".$nameTable.".saldo_ajustes_entrada      = '" . $datanum->{'.saldo_ajustes_entrada'} . "',
+                           ".$nameTable.".saldo_ajustes_salida      = '" . $datanum->{'.saldo_ajustes_salida'} . "',
+                           ".$nameTable.".saldo_bono      = '" . $datanum->{'.saldo_bono'} . "',
+                           ".$nameTable.".saldo_bono_casino_vivo      = '" . $datanum->{'.saldo_bono_casino_vivo'} . "',
+                           ".$nameTable.".saldo_notaret_eliminadas      = '" . $datanum->{'.saldo_notaret_eliminadas'} . "',
+                           ".$nameTable.".saldo_bono_free_ganado      = '" . $datanum->{'.saldo_bono_free_ganado'} . "'
+                         
+
+       ";
+
+        $BonoInterno->execQuery($transaccion, $sql);
+        if(false) {
+            $sql = "INSERT INTO usuario_saldoresumen (usuario_id, mandante, saldo_recarga, saldo_apuestas, saldo_premios,
+                           saldo_apuestas_casino, saldo_premios_casino, saldo_notaret_pagadas,
+                           saldo_notaret_pend, saldo_notaret_creadas, saldo_ajustes_entrada, saldo_ajustes_salida,
+                           saldo_inicial, saldo_final, saldo_bono, saldo_creditos_inicial, saldo_creditos_base_inicial,
+                           saldo_creditos_final, saldo_creditos_base_final,saldo_notaret_eliminadas,saldo_bono_free_ganado,billetera_id) VALUES (
+                           '" . $datanum->{'data.usuario_id'} . "',
+                           '" . $datanum->{'usuario.mandante'} . "',
+                           '" . $datanum->{'.saldo_recarga'} . "',
+                           '" . $datanum->{'.saldo_apuestas'} . "',
+                           '" . $datanum->{'.saldo_premios'} . "',
+                           '" . $datanum->{'.saldo_apuestas_casino'} . "',
+                           '" . $datanum->{'.saldo_premios_casino'} . "',
+                           '" . $datanum->{'.saldo_notaret_pagadas'} . "',
+                           '" . $datanum->{'.saldo_notaret_pend'} . "',
+                           '" . $datanum->{'.saldo_notaret_creadas'} . "',
+                           '" . $datanum->{'.saldo_ajustes_entrada'} . "',
+                           '" . $datanum->{'.saldo_ajustes_salida'} . "',
+                           '" . $datanum->{'.saldo_inicial'} . "',
+                           '" . $datanum->{'.saldo_final'} . "',
+                           '" . $datanum->{'.saldo_bono'} . "',
+                           '" . $datanum->{'.saldo_creditos_inicial'} . "',
+                           '" . $datanum->{'.saldo_creditos_base_inicial'} . "',
+                           '" . $datanum->{'.saldo_creditos_final'} . "',
+                           '" . $datanum->{'.saldo_creditos_base_final'} . "',
+                           '" . $datanum->{'.saldo_notaret_eliminadas'} . "',
+                           '" . $datanum->{'.saldo_bono_free_ganado'} . "',
+                           '" . $datanum->{'data.billetera_id'} . "'
+                                 )
+       
+       
+ON DUPLICATE KEY UPDATE usuario_saldoresumen.saldo_recarga      = usuario_saldoresumen.saldo_recarga + '" . $datanum->{'.saldo_recarga'} . "',
+                         usuario_saldoresumen.saldo_apuestas      = usuario_saldoresumen.saldo_apuestas + '" . $datanum->{'.saldo_apuestas'} . "',
+                         usuario_saldoresumen.saldo_premios      = usuario_saldoresumen.saldo_premios + '" . $datanum->{'.saldo_premios'} . "',
+                         usuario_saldoresumen.saldo_apuestas_casino      = usuario_saldoresumen.saldo_apuestas_casino + '" . $datanum->{'.saldo_apuestas_casino'} . "',
+                         usuario_saldoresumen.saldo_premios_casino      = usuario_saldoresumen.saldo_premios_casino + '" . $datanum->{'.saldo_premios_casino'} . "',
+                         usuario_saldoresumen.saldo_notaret_pagadas      = usuario_saldoresumen.saldo_notaret_pagadas + '" . $datanum->{'.saldo_notaret_pagadas'} . "',
+                         usuario_saldoresumen.saldo_notaret_pend      = usuario_saldoresumen.saldo_notaret_pend + '" . $datanum->{'.saldo_notaret_pend'} . "',
+                         usuario_saldoresumen.saldo_notaret_creadas      = usuario_saldoresumen.saldo_notaret_creadas + '" . $datanum->{'.saldo_notaret_creadas'} . "',
+                         usuario_saldoresumen.saldo_ajustes_entrada      = usuario_saldoresumen.saldo_ajustes_entrada + '" . $datanum->{'.saldo_ajustes_entrada'} . "',
+                         usuario_saldoresumen.saldo_ajustes_salida      = usuario_saldoresumen.saldo_ajustes_salida + '" . $datanum->{'.saldo_ajustes_salida'} . "',
+                         usuario_saldoresumen.saldo_bono      = usuario_saldoresumen.saldo_bono + '" . $datanum->{'.saldo_bono'} . "',
+                         usuario_saldoresumen.saldo_notaret_eliminadas      = usuario_saldoresumen.saldo_notaret_eliminadas + '" . $datanum->{'.saldo_notaret_eliminadas'} . "',
+                         usuario_saldoresumen.saldo_bono_free_ganado      = usuario_saldoresumen.saldo_bono_free_ganado + '" . $datanum->{'.saldo_bono_free_ganado'} . "'
+                         
+
+       ";
+
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+        $transaccion->commit();
+
+    }
+
+
+
+    $data = $BonoInterno->execQuery('', $UsuarioPuntoVentaFinalConDetalles);
+
+
+    foreach ($data as $datanum) {
+        $BonoDetalleMySqlDAO = new BonoDetalleMySqlDAO();
+        $transaccion = $BonoDetalleMySqlDAO->getTransaction();
+        $transaccion->getConnection()->beginTransaction();
+        $sql = "INSERT INTO   ".$nameTable."  (usuario_id, mandante, fecha, saldo_recarga, saldo_apuestas, saldo_premios,
+                           saldo_apuestas_casino, saldo_premios_casino, saldo_notaret_pagadas,
+                           saldo_notaret_pend, saldo_notaret_creadas, saldo_ajustes_entrada, saldo_ajustes_salida,
+                           saldo_inicial, saldo_final, saldo_bono, saldo_creditos_inicial, saldo_creditos_base_inicial,
+                           saldo_creditos_final, saldo_creditos_base_final,saldo_notaret_eliminadas,saldo_bono_free_ganado,billetera_id) VALUES (
+                           '" . $datanum->{'data.usuario_id'} . "',
+                           '" . $datanum->{'usuario.mandante'} . "',
+                           '" . $datanum->{'.fecha'} . "',
+                           '" . $datanum->{'.saldo_recarga'} . "',
+                           '" . $datanum->{'.saldo_apuestas'} . "',
+                           '" . $datanum->{'.saldo_premios'} . "',
+                           '" . $datanum->{'.saldo_apuestas_casino'} . "',
+                           '" . $datanum->{'.saldo_premios_casino'} . "',
+                           '" . $datanum->{'.saldo_notaret_pagadas'} . "',
+                           '" . $datanum->{'.saldo_notaret_pend'} . "',
+                           '" . $datanum->{'.saldo_notaret_creadas'} . "',
+                           '" . $datanum->{'.saldo_ajustes_entrada'} . "',
+                           '" . $datanum->{'.saldo_ajustes_salida'} . "',
+                           '" . $datanum->{'.saldo_inicial'} . "',
+                           '" . $datanum->{'.saldo_final'} . "',
+                           '" . $datanum->{'.saldo_bono'} . "',
+                           '" . $datanum->{'.saldo_creditos_inicial'} . "',
+                           '" . $datanum->{'.saldo_creditos_base_inicial'} . "',
+                           '" . $datanum->{'.saldo_creditos_final'} . "',
+                           '" . $datanum->{'.saldo_creditos_base_final'} . "',
+                           '" . $datanum->{'.saldo_notaret_eliminadas'} . "',
+                           '" . $datanum->{'.saldo_bono_free_ganado'} . "',
+                           '0'
+                                 )
+       
+       
+ON DUPLICATE KEY UPDATE   ".$nameTable.".saldo_recarga      = '" . $datanum->{'.saldo_recarga'} . "',
+                           ".$nameTable.".saldo_apuestas      = '" . $datanum->{'.saldo_apuestas'} . "',
+                           ".$nameTable.".saldo_premios      = '" . $datanum->{'.saldo_premios'} . "',
+                           ".$nameTable.".saldo_apuestas_casino      = '" . $datanum->{'.saldo_apuestas_casino'} . "',
+                           ".$nameTable.".saldo_premios_casino      = '" . $datanum->{'.saldo_premios_casino'} . "',
+                           ".$nameTable.".saldo_notaret_pagadas      = '" . $datanum->{'.saldo_notaret_pagadas'} . "',
+                           ".$nameTable.".saldo_notaret_pend      = '" . $datanum->{'.saldo_notaret_pend'} . "',
+                           ".$nameTable.".saldo_notaret_creadas      = '" . $datanum->{'.saldo_notaret_creadas'} . "',
+                           ".$nameTable.".saldo_ajustes_entrada      = '" . $datanum->{'.saldo_ajustes_entrada'} . "',
+                           ".$nameTable.".saldo_ajustes_salida      = '" . $datanum->{'.saldo_ajustes_salida'} . "',
+                           ".$nameTable.".saldo_bono      = '" . $datanum->{'.saldo_bono'} . "',
+                           ".$nameTable.".saldo_notaret_eliminadas      = '" . $datanum->{'.saldo_notaret_eliminadas'} . "',
+                           ".$nameTable.".saldo_bono_free_ganado      = '" . $datanum->{'.saldo_bono_free_ganado'} . "'
+                         
+
+       ";
+
+        $BonoInterno->execQuery($transaccion, $sql);
+        if(false) {
+            $sql = "INSERT INTO usuario_saldoresumen (usuario_id, mandante, saldo_recarga, saldo_apuestas, saldo_premios,
+                           saldo_apuestas_casino, saldo_premios_casino, saldo_notaret_pagadas,
+                           saldo_notaret_pend, saldo_notaret_creadas, saldo_ajustes_entrada, saldo_ajustes_salida,
+                           saldo_inicial, saldo_final, saldo_bono, saldo_creditos_inicial, saldo_creditos_base_inicial,
+                           saldo_creditos_final, saldo_creditos_base_final,saldo_notaret_eliminadas,saldo_bono_free_ganado,billetera_id) VALUES (
+                           '" . $datanum->{'data.usuario_id'} . "',
+                           '" . $datanum->{'usuario.mandante'} . "',
+                           '" . $datanum->{'.saldo_recarga'} . "',
+                           '" . $datanum->{'.saldo_apuestas'} . "',
+                           '" . $datanum->{'.saldo_premios'} . "',
+                           '" . $datanum->{'.saldo_apuestas_casino'} . "',
+                           '" . $datanum->{'.saldo_premios_casino'} . "',
+                           '" . $datanum->{'.saldo_notaret_pagadas'} . "',
+                           '" . $datanum->{'.saldo_notaret_pend'} . "',
+                           '" . $datanum->{'.saldo_notaret_creadas'} . "',
+                           '" . $datanum->{'.saldo_ajustes_entrada'} . "',
+                           '" . $datanum->{'.saldo_ajustes_salida'} . "',
+                           '" . $datanum->{'.saldo_inicial'} . "',
+                           '" . $datanum->{'.saldo_final'} . "',
+                           '" . $datanum->{'.saldo_bono'} . "',
+                           '" . $datanum->{'.saldo_creditos_inicial'} . "',
+                           '" . $datanum->{'.saldo_creditos_base_inicial'} . "',
+                           '" . $datanum->{'.saldo_creditos_final'} . "',
+                           '" . $datanum->{'.saldo_creditos_base_final'} . "',
+                           '" . $datanum->{'.saldo_notaret_eliminadas'} . "',
+                           '" . $datanum->{'.saldo_bono_free_ganado'} . "',
+                           '0'
+                                 )
+       
+       
+ON DUPLICATE KEY UPDATE usuario_saldoresumen.saldo_recarga      = usuario_saldoresumen.saldo_recarga + '" . $datanum->{'.saldo_recarga'} . "',
+                         usuario_saldoresumen.saldo_apuestas      = usuario_saldoresumen.saldo_apuestas +'" . $datanum->{'.saldo_apuestas'} . "',
+                         usuario_saldoresumen.saldo_premios      = usuario_saldoresumen.saldo_premios + '" . $datanum->{'.saldo_premios'} . "',
+                         usuario_saldoresumen.saldo_apuestas_casino      = usuario_saldoresumen.saldo_apuestas_casino + '" . $datanum->{'.saldo_apuestas_casino'} . "',
+                         usuario_saldoresumen.saldo_premios_casino      = usuario_saldoresumen.saldo_premios_casino + '" . $datanum->{'.saldo_premios_casino'} . "',
+                         usuario_saldoresumen.saldo_notaret_pagadas      = usuario_saldoresumen.saldo_notaret_pagadas + '" . $datanum->{'.saldo_notaret_pagadas'} . "',
+                         usuario_saldoresumen.saldo_notaret_pend      = usuario_saldoresumen.saldo_notaret_pend + '" . $datanum->{'.saldo_notaret_pend'} . "',
+                         usuario_saldoresumen.saldo_notaret_creadas      = usuario_saldoresumen.saldo_notaret_creadas + '" . $datanum->{'.saldo_notaret_creadas'} . "',
+                         usuario_saldoresumen.saldo_ajustes_entrada      = usuario_saldoresumen.saldo_ajustes_entrada + '" . $datanum->{'.saldo_ajustes_entrada'} . "',
+                         usuario_saldoresumen.saldo_ajustes_salida      = usuario_saldoresumen.saldo_ajustes_salida + '" . $datanum->{'.saldo_ajustes_salida'} . "',
+                         usuario_saldoresumen.saldo_bono      = usuario_saldoresumen.saldo_bono + '" . $datanum->{'.saldo_bono'} . "',
+                         usuario_saldoresumen.saldo_notaret_eliminadas      = usuario_saldoresumen.saldo_notaret_eliminadas + '" . $datanum->{'.saldo_notaret_eliminadas'} . "',
+                         usuario_saldoresumen.saldo_bono_free_ganado      = usuario_saldoresumen.saldo_bono_free_ganado + '" . $datanum->{'.saldo_bono_free_ganado'} . "'
+                         
+
+       ";
+
+            $BonoInterno->execQuery($transaccion, $sql);
+        }
+        $transaccion->commit();
+    }
+    $BonoDetalleMySqlDAO = new BonoDetalleMySqlDAO();
+    $transaccion = $BonoDetalleMySqlDAO->getTransaction();
+    $transaccion->getConnection()->beginTransaction();
+
+    //$procesoInterno=$BonoInterno->execQuery($transaccion, "INSERT INTO procesos_internos ( tipo, fecha_crea, usucrea_id) VALUES ('ResumenesPaso2-2-6AM','".date("Y-m-d 00:00:00")."','0');");
+
+
+
+    $transaccion->commit();
+
+    $log = "\r\n" . "-------------------------" . "\r\n";
+    $log = $log . "Terminacion: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+    fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+
+    $message = "*CRON: (Fin) * " . " ResumenesPaso2-6AM - Fecha: " . date("Y-m-d H:i:s");
+
+/*    try{
+
+        $rules = [];
+        array_push($rules, array("field" => "usuario.usuario_id", "data" => "'5208','14919','5703','5234','5219','22580','8752','204','9362','14913','12798','8937','1687','391','9385','24604','21229','21016','20856','9723','202','1589','3145','23399','2197','1775','20969','33302','15611','9386','5218','27278','199','3308','38554','38202','26687','34821','30497','4105','9336'", "op" => "in"));
+
+
+        $filtro = array("rules" => $rules, "groupOp" => "AND");
+        $json = json_encode($filtro);
+
+        $Usuario = new Usuario();
+
+        $usuarios = $Usuario->getUsuariosCustom("  usuario.usuario_id,usuario.fecha_cierrecaja,usuario_mandante.usumandante_id ", "usuario.usuario_id", "desc", 0, 100000, $json, true);
+
+        $usuarios = json_decode($usuarios);
+
+        $usuariosFinal = [];
+
+        foreach ($usuarios->data as $key => $value) {
+
+            if($value->{'usuario.fecha_cierrecaja'} != ''){
+                if(date('Y-m-d H:i:s',strtotime($value->{'usuario.fecha_cierrecaja'})) < date('Y-m-d H:i:s',strtotime('-1 days'))){
+
+                    $ConfigurationEnvironment = new ConfigurationEnvironment();
+
+                    $ConfigurationEnvironment->CierreCaja($value->{'usuario_mandante.usumandante_id'},array(),array(),array(),date('Y-m-d',strtotime('-1 days')),date('Y-m-d 00:00:00',strtotime('-1 days')),date('Y-m-d 23:59:59',strtotime('-1 days')));
+                }
+            }
+
+        }
+
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "Terminacion Cierres de caja: " . $fechaSoloDia . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+
+        $message = "*CRON: (Fin) * " . " Terminacion Cierres de caja - Fecha: " . date("Y-m-d H:i:s");
+
+        exec("php -f ".__DIR__."../src/imports/Slack/message.php '" . $message . "' '#virtualsoft-cron' > /dev/null & ");
+
+    }catch (Exception $e){
+        print_r($e);
+        $log = "\r\n" . "-------------------------" . "\r\n";
+        $log = $log . "ERROR: " . $e->getMessage() . " - " . date('Y-m-d H:i:s');
+        fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+
+
+        $message = "*CRON: (ERROR) * " . " Cierres de caja - Fecha: " . date("Y-m-d H:i:s");
+
+        exec("php -f ".__DIR__."../src/imports/Slack/message.php '" . $message . "' '#virtualsoft-cron' > /dev/null & ");
+
+    }*/
+    exec("php -f ".__DIR__."../src/imports/Slack/message.php '" . $message . "' '#virtualsoft-cron' > /dev/null & ");
+
+
+} catch (Exception $e) {
+    print_r($e);
+    $log = "\r\n" . "-------------------------" . "\r\n";
+    $log = $log . "ERROR: " . $e->getMessage() . " - " . date('Y-m-d H:i:s');
+    fwriteCustom('log_' . date("Y-m-d") . '.log',$log);
+
+
+    $message = "*CRON: (ERROR) * " . $e->getLine(). " ResumenesPaso2-6AM - Fecha: " . date("Y-m-d H:i:s");
+
+        exec("php -f ".__DIR__."../src/imports/Slack/message.php '" . $message . "' '#virtualsoft-cron' > /dev/null & ");
+
+}
+
+
+
+
+

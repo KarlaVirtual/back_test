@@ -1,0 +1,11 @@
+{
+    "balance":"Usuario->getBalance()",
+    "bonus":0,
+    "currency":"UsuarioMandante->moneda",
+    "userId":"responseGame->usuarioId",
+    "token":"$this->token",
+    "message":"$this->message",
+    "errorCode":"$this->errorCode",
+    "status":"$this->status",
+    "date":"$this->date"
+}

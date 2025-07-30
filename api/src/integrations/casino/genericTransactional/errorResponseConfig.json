@@ -1,0 +1,203 @@
+{
+    "KAGAMING":{
+        "dataFormat":"json",	
+        "100001":{
+            "supplierCode":2,
+            "supplierMessage":"Invalid request."
+        },
+        "100012":{
+            "supplierCode":3,
+            "supplierMessage":"Invalid hash."
+        },
+        "26":{
+            "supplierCode":4,
+            "supplierMessage":"Wallet not found specific to a licensee, operator, and game."
+        },
+        "10007":{
+            "supplierCode":5,
+            "supplierMessage":"Request mismatch."
+        },
+        "20001":{
+            "supplierCode":10,
+            "supplierMessage":"Insufficient funds in player game wallet."
+        },
+        "default":{
+            "supplierCode":1,
+            "supplierMessage":"UNKNOWN_ERROR"
+        },
+        "structureErrorResponse":{
+            "status":{"key":"supplierMessage"},
+            "balance":{"key":"balance"},
+            "bonus":{"key":"bonus", "value":0}
+        }
+    },
+    "AMUSNET":{
+        "dataFormat":"xml",
+        "10011":{
+            "supplierCode":3100,
+            "supplierMessage":"EXPIRED"
+        },
+        "10012":{
+            "supplierCode":3100,
+            "supplierMessage":"EXPIRED"
+        },
+        "21":{
+            "supplierCode":3100,
+            "supplierMessage":"EXPIRED"
+        },
+        "20001":{
+            "supplierCode":3100,
+            "supplierMessage":"INSUFFICIENT_FUNDS"
+        },
+        "0":{
+            "supplierCode":3000,
+            "supplierMessage":"INTERNAL_SERVER_ERROR"
+        },
+        "10017":{
+            "supplierCode":3000,
+            "supplierMessage":"INTERNAL_SERVER_ERROR"
+        },
+        "10021":{
+            "supplierCode":3000,
+            "supplierMessage":"INTERNAL_SERVER_ERROR"
+        },
+        "20002":{
+            "supplierCode":3000,
+            "supplierMessage":"INTERNAL_SERVER_ERROR"
+        },
+        "10001":{
+            "supplierCode":1100,
+            "supplierMessage":"DUPLICATE",
+            "isHandledError":true,
+            "addToRootName":"Response",
+            "structureErrorResponse":{
+               "Balance":{
+                    "key":"balance",
+                    "formatConfiguration":{
+                        "type":"floatval",
+                        "multiply":100
+                    }
+                },
+                "CasinoTransferId":{"key":"gameTransactionLogId"},
+                "ErrorCode":{"value":1000},
+                "ErrorMessage":{"value":"OK"}
+            }
+        },
+        "default":{
+            "supplierCode":3000,
+            "supplierMessage":"INTERNAL_SERVER_ERROR"
+        },
+        "structureErrorResponse":{
+            "ErrorCode":{"key":"supplierCode"},
+            "ErrorMessage":{"key":"supplierMessage"}
+        }
+    },
+    "RAW":{
+        "dataFormat":"xml",
+        "20000":{
+            "supplierCode":501,
+            "supplierMessage":"Invalid user identifier"
+        },
+        "99":{
+            "supplierCode":502,
+            "supplierMessage":"Invalid LeGa session identifier"
+        },
+        "10017":{
+            "supplierCode":506,
+            "supplierMessage":"Invalid currency "
+        },
+        "10005":{
+            "supplierCode":513,
+            "supplierMessage":"Invalid transaction"
+        },
+        "30004":{
+            "supplierCode":530,
+            "supplierMessage":"Service Temporarily Unavailable "
+        },
+        "default":{
+            "supplierCode":515,
+            "supplierMessage":"Unspecified error"
+        },
+        "structureErrorResponse":{
+            "response":{
+                "@attributes":{
+                    "result":{"value":"ERROR"},
+                    "timestamp":{
+                        "value":"date",
+                        "dateCustomization":{
+                            "format":"Y-m-d H:i:s",
+                            "timezone":"UTC",
+                            "convertToTimestamp":true
+                        }
+                    }
+                },
+                "errorCode":{"key":"supplierCode"},
+                "errorMessage":{"key":"supplierMessage"}
+            }
+        }
+    },
+    "RFRANCO":{
+        "dataFormat":"json",
+        "30004":{
+            "isHandledError":true,
+            "supplierCode":"Wallet_SystemError",
+            "supplierMessage":"The server is maintenance",
+            "structureErrorResponse":{
+                "statusCode":{"value":500},
+                "statusDescription":{"key":"supplierMessage"},
+                "code":{"key":"supplierCode"}
+            }
+        },
+        "10005":{
+            "supplierCode":"Wallet_UnknownError",
+            "supplierMessage":"Transaction api already processed"
+        },
+        "21":{
+            "supplierCode":"Wallet_InvalidGameSessionToken",
+            "supplierMessage":"User token does not exist"
+        },
+        "10030":{
+            "supplierCode":"Wallet_PlayerAuthenticationTokenExpired",
+            "supplierMessage":"The token is inactive or expired"
+        },
+        "20003":{
+            "supplierCode":"Wallet_PlayerStatusForbids",
+            "supplierMessage":"The user is not allowed to play, user is inactive or blocked"
+        },
+        "10011":{
+            "supplierCode":"OpeningGameSessions",
+            "supplierMessage":"The token is inactive or expired"
+        },
+        "20001":{
+            "supplierCode":"Wallet_InsufficientFunds",
+            "supplierMessage":"The user do not have enough funds for this bet"
+        },
+        "59":{
+            "supplierCode":"Wallet_LimitsExceeded",
+            "supplierMessage":"The user do not have enough funds for this bet"
+        },
+        "default":{
+            "supplierCode":"Wallet_UnknownError",
+            "supplierMessage":"Internal server error"       
+        },
+        "structureErrorResponse":{
+            "statusCode":{"value":422},
+            "statusDescription":{"key":"supplierMessage"},
+            "code":{"key":"supplierCode"}
+        },
+        "responseHttpCodes":{
+            "10005":422,
+            "21":422,
+            "10030":422,
+            "20003":422,
+            "10011":422,
+            "20001":422,
+            "59":422,
+            "30004":500
+        }
+    },
+    "default":{
+        "supplierCode":5000,
+        "supplierMessage":"Internal server error"       
+    }
+}

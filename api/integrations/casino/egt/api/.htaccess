@@ -1,0 +1,7 @@
+
+RewriteEngine On 
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]
+SetEnvIfNoCase ^X-Checksum-Fields$ "^.*$" HTTP_X_CHECKSUM_FIELDS=$0
+SetEnvIfNoCase ^X-Checksum$ "^.*$" HTTP_X_CHECKSUM=$0

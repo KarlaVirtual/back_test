@@ -1,0 +1,256 @@
+{
+    "SUPPLIERNAME":{
+        "dataFormat":"json",
+        "validateActionFor":{
+            "type":"url",
+            "callable":null
+        },
+        "action":{
+            "start":"authenticate",
+            "balance":"balance",
+            "play":"debit",
+            "credit":"credit",
+            "revoke":"rollback",
+            "end":"end"
+        },
+        "start":{
+            "requireFullData":false,
+            "validateFor":["token", "userId"],
+            "construct":{
+                "userId":{"key":"playerId"},
+                "token":{"key":"token", "value":null},
+                "sessionId":{"key":"sessionId", "value":null},
+                "message":{"key":"status", "value":"success"},
+                "errorCode":{"key":"statusCode", "value":0}
+            }, 
+            "parameters":{
+                "updateToken":{"key":"updateToken", "value":false}
+            },
+            "response":{
+                "playerId":{"key":"userId"},
+                "sessionId":{"key":"sessionId"},
+                "currency":{"key":"currency"},
+                "balance":{
+                    "key":"balance",
+                    "formatConfiguration":{
+                        "type":"intval",
+                        "round":2,
+                        "multiply":100
+                    }
+                },
+                "status":{"key":"message"},
+                "statusCode":{"key":"errorCode"}
+            }
+        }, 
+        "balance":{
+            "requireFullData":false,
+            "validateFor":["token", "userId"],
+            "construct":{
+                "userId":{"key":"playerId"},
+                "token":{"key":"token", "value":null},
+                "errorCode":{"key":"statusCode", "value":0},
+                "message":{"key":"status", "value":"success"}
+            },
+            "parameters":{
+                "currency":{"key":"currency", "value":null}
+            },
+            "response":{
+                "balance":{
+                    "key":"balance",
+                    "formatConfiguration":{
+                        "type":"intval",
+                        "round":2,
+                        "multiply":100
+                    }
+                },
+                "status":{"key":"message"},
+                "statusCode":{"key":"errorCode"}
+            }
+        },
+        "play":{
+            "requireFullData":true,
+            "continuesExecuting":["play", "credit"],
+            "validateFor":["token", "userId"],
+            "construct":{
+                "userId":{"key":"playerId"},
+                "token":{"key":"token", "value":null},
+                "sessionId":{"key":"sessionId", "value":null},
+                "errorCode":{"key":"statusCode", "value":0},
+                "message":{"key":"status", "value":"success"}
+            },
+            "parameters":{
+                "gameId":{"key":"gameId"},
+                "roundId":{
+                    "key":"round", 
+                    "value":0,
+                    "customizeValue":{
+                        "variables":["sessionId", "transactionId"],
+                        "functionFormatIsRequired":{
+                            "value":false,
+                            "nameFunction":null
+                        }
+                    }
+                },
+                "transactionId":{
+                    "key":"transactionId",
+                    "customizeValue":{
+                        "variables":["transactionId", "action", "gameId", "timestamp"],
+                        "functionFormatIsRequired":{
+                            "value":false,
+                            "nameFunction":null
+                        }
+                    }
+                },
+                "amount":{
+                    "bonusGame":{"key":"freeGames", "bonusValue":false},
+                    "freeSpin":{
+                        "keys":["promotionSpins", "status"],
+                        "bonusValue":false 
+                    },
+                    "key":"betAmount", 
+                    "value":0,
+                    "formatConfiguration":{
+                        "type":"floatval",
+                        "round":2,
+                        "split":100
+                    }
+                },
+                "currency":{"key":"currency", "value":null},
+                "isFreeSpin":{
+                    "keys":["promotionSpins", "status"],
+                    "value":false 
+                }
+            },
+            "response":{
+                "balance":{
+                    "key":"balance",
+                    "formatConfiguration":{
+                        "type":"intval",
+                        "round":2,
+                        "multiply":100
+                    }
+                },
+                "status":{"key":"message"},
+                "statusCode":{"key":"errorCode"}
+            }
+        },
+        "credit":{
+            "requireFullData":true,
+            "continuesExecuting":["play", "credit"],
+            "validateFor":["token", "userId"],
+            "construct":{
+                "userId":{"key":"playerId"},
+                "token":{"key":"token", "value":null},
+                "sessionId":{"key":"sessionId", "value":null},
+                "errorCode":{"key":"statusCode", "value":0},
+                "message":{"key":"status", "value":"success"}
+            },
+            "parameters":{
+                "gameId":{"key":"gameId"},
+                "roundId":{
+                    "key":"round", 
+                    "value":0,
+                    "customizeValue":{
+                        "variables":["sessionId", "transactionId"],
+                        "functionFormatIsRequired":{
+                            "value":false,
+                            "nameFunction":null
+                        }
+                    }
+                },
+                "transactionId":{
+                    "key":"transactionId",
+                    "customizeValue":{
+                        "variables":["transactionId", "action", "gameId", "timestamp", "_CREDIT"],
+                        "functionFormatIsRequired":{
+                            "value":false,
+                            "nameFunction":null
+                        }
+                    }
+                },
+                "amount":{
+                    "key":["winAmount", "amount"],
+                    "formatConfiguration":{
+                        "type":"floatval",
+                        "round":2,
+                        "split":100
+                    }
+                },
+                "currency":{"key":"currency", "value":null},
+                "isFreeSpin":{
+                    "keys":["promotionSpins", "status"],
+                    "value":false 
+                },
+                "isEndRound":{"key":"isEndRound", "value":""}
+            },
+            "response":{
+                "balance":{
+                    "key":"balance",
+                    "formatConfiguration":{
+                        "type":"intval",
+                        "round":2,
+                        "multiply":100
+                    }
+                },
+                "status":{"key":"message"},
+                "statusCode":{"key":"errorCode"}
+            }
+        },
+        "revoke":{
+            "requireFullData":true,
+            "validateFor":["token", "userId"],
+            "rollbackTo":["debit", "credit"],
+            "construct":{
+                "userId":{"key":"playerId"},
+                "token":{"key":"token", "value":null},
+                "sessionId":{"key":"sessionId", "value":null},
+                "errorCode":{"key":"statusCode", "value":0},
+                "message":{"key":"status", "value":"success"}
+            },
+            "parameters":{
+                "amount":{"key":"amount", "value":0},
+                "transactionId":{
+                    "key":"transactionId",
+                    "customizeValue":{
+                        "variables":["transactionId", "revokedAction", "gameId", "timestamp"],
+                        "functionFormatIsRequired":{
+                            "value":false,
+                            "nameFunction":null
+                        }
+                    }
+                },
+                "roundId":{
+                    "key":"round", 
+                    "value":0,
+                    "customizeValue":{
+                        "variables":["sessionId", "transactionId"],
+                        "functionFormatIsRequired":{
+                            "value":false,
+                            "nameFunction":null
+                        }
+                    }
+                },
+                "gameId":{"key":"gameId", "value":null}
+            },
+            "response":{
+                "balance":{
+                    "key":"balance",
+                    "formatConfiguration":{
+                        "type":"intval",
+                        "round":2,
+                        "multiply":100
+                    }
+                },
+                "status":{"key":"message"},
+                "statusCode":{"key":"errorCode"}
+            }
+        },
+        "end":{
+            "isOnlyResponse":true,
+            "response":{
+                "statusCode":0,
+                "status":"success"
+            }          
+        }
+    }
+}

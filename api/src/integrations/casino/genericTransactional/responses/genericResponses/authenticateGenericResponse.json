@@ -1,0 +1,14 @@
+{
+    "userIdWithCurrency":"responseG->usuarioId . responseG->moneda",
+    "balance":"responseG->saldo",
+    "bonus":0,
+    "currency":"UsuarioMandante->moneda",
+    "errorCode":1000,
+    "message":"Success",
+    "userId":"$responseG->usuarioId",
+    "userName":"$this->userName",
+    "sessionId":"$this->sessionId",
+    "token":"$usuarioToken->token",
+    "status":"$this->status",
+    "date":"$this->date"
+}

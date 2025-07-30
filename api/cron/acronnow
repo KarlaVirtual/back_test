@@ -1,0 +1,36 @@
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/resumenesProcesosMan.php 2> /tmp/errorProcesosMan.log
+0 * * * * /home/home2/backendprodfinal/cron/cronHora.sh 2> /tmp/errorhora.log
+0 0 * * * /home/home2/backendprodfinal/api/cron/resumenes.sh 2> /tmp/errorResumenes.log
+0 1 * * * /home/home2/backendprodfinal/api/cron/cronHora4.sh 2> /tmp/errorhora4.log
+0 6 * * * /home/home2/backendprodfinal/api/cron/cronHora6.sh 2> /tmp/errorhora6.log
+#* * * * * /home/home2/backendprodfinal/api/cron/cronSegundo.sh 2> /tmp/errorseg.log
+*/10 * * * * php -f /home/home2/backendprodfinal/api/cron/revisarDepositosPaybrokers.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronTotalPago.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronBonosExpirados.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronAsignacionBonosSecundarios.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronPuntosLealtad.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronPuntosLealtadLotosports.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronPuntosLealtadDeportivas.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronPuntosLealtadEcuabet.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronSorteosStickers.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronSorteosStickersSportsbook.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronSorteosStickersCompleted.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronAlertasRiesgo.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronTorneosCasino.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronDataCompleta2.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronSorteosPremios.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronSorteosPremios2.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronCashbackPremios.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronCashBack.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronActualizacionNivelesUsuarios.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronActualizacionNivelesUsuarios2.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronNotaRetiroProcesando.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronInvitacionesReferidos.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronLogrosReferidos.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronTorneoDeportivas.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronDisableSelfexclusion.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronDisableLimitExclusion.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronLimitInt.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/DesactivateContingencies.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronExpireWithdraw.php
+* * * * * /usr/bin/php /home/home2/backendprodfinal/api/cron/cronExpireOTPCodes.php

@@ -1,0 +1,37 @@
+{
+    "SUPPLIER NAME":{
+        "internal error code":{
+            "supplierCode":401,
+            "supplierMessage":"User token is invalid."
+        },
+        "21":{
+            "supplierCode":403,
+            "supplierMessage":"User token is expired."
+        },
+        "error handled as non-error":{
+            "supplierCode":409,
+            "supplierMessage":"Duplicate transaction",
+            "isHandledError":true,
+            "structureErrorResponse":{
+                "code":{"key":"supplierCode"},
+                "message":{"key":"supplierMessage"},
+                "data":{
+                    "operator_tx_id":{"key":"gameTransactionLogId"},
+                    "new_balance":{"key":"balance"},
+                    "old_balance":{"key":"oldBalance"},
+                    "currency":{"key":"currency"},
+                    "provider":{"key":"provider"},
+                    "provider_tx_id":{"key":"gameTransactionId"}
+                }
+            }
+        },
+        "default":{
+            "supplierCode":500,
+            "supplierMessage":"Internal server error"
+        },
+        "structureErrorResponse":{
+            "code":{"key":"supplierCode"},
+            "message":{"key":"supplierMessage"}
+        }
+    }
+}

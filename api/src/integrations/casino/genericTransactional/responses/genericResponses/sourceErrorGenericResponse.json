@@ -1,0 +1,5 @@
+{
+    "gameTransactionLogId":"$transjuegoLog->transjuegologId",
+    "balance":"responseGame->saldo",
+    "currency":"responseGame->moneda"
+}

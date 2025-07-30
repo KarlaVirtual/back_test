@@ -1,0 +1,9 @@
+name: 'Print Changes'
+description: 'This action prints the changes made to a GitHub repository.'
+author: 'Tu nombre'
+runs:
+  using: 'composite'
+  steps:
+    - shell: bash
+      run: |
+        echo "Hello from the action!"

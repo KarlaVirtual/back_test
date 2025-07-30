@@ -1,0 +1,31 @@
+{
+    "name": "balint-horvath/dotenv-php",
+    "description": "Simple .env file parser and ENV loader (.env to getenv() and $_ENV) based on standard PHP INI parser (parse_ini_file).",
+    "type": "library",
+    "license": "Apache-2.0",
+    "authors": [
+        {
+            "name": "Bálint Horváth",
+            "email": "balint@balint.digital"
+        }
+    ],
+    "require": {
+        "php": ">=7.0"
+    },
+    "require-dev": {
+        "kahlan/kahlan": "^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "BalintHorvath\\DotEnv\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "BalintHorvath\\DotEnv\\Spec\\": "spec/"
+        }
+    },
+    "scripts": {
+      "test": "vendor/bin/kahlan"
+    }
+}

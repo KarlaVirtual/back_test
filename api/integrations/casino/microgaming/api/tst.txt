@@ -1,0 +1,14 @@
+https://redirector32.valueactive.eu/Casino/Default.aspx?applicationid=4023&sext1=demo&sext2=demo&serverid=22619&gameid=TombRaider&ul=EEEEE&variant=uat-demo
+https://redirector32.valueactive.eu/Casino/Default.aspx?applicationid=4023&serverid=24030&gameid=TombRaider&authtoken=1171234567&ul=en&variant=UAT
+ https://redirector32.valueactive.eu/Casino/Default.aspx?applicationid=4023&serverid=24030&variant=UAT&authtoken=1171234567&gameid=MGS_TombRaider&ul=es&operatorId=
+ //print_r(str_replace('<?xml version="1.0"?>',"",$response));
+
+        print_r('<pkt>
+<methodresponse name="login" timestamp="2011/01/18 14:33:00.000">
+<result seq="'.$seq.'" token="'.$Token.'"
+loginname="Usuario1" currency="USD" country=""
+city="" balance="0" bonusbalance="0">
+<extinfo/>
+</result>
+</methodresponse>
+</pkt>');

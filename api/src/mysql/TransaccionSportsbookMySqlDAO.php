@@ -1,0 +1,1246 @@
+<?php namespace Backend\mysql;
+use Backend\dao\TransaccionSportsbookDAO;
+use Backend\dto\Helpers;
+use Backend\dto\TransaccionSportsbook;
+use Backend\sql\Transaction;
+use Backend\sql\SqlQuery;
+use Backend\sql\QueryExecutor;
+use Exception;
+/** 
+* Clase 'ApiTransactionsMySqlDAO'
+* 
+* Esta clase provee las consultas del modelo o tabla 'ApiTransactions'
+* 
+* Ejemplo de uso: 
+* $ApiTransactionsMySqlDAO = new ApiTransactionsMySqlDAO();
+* 
+* 
+* @package ninguno 
+* @author Daniel Tamayo <it@virtualsoft.tech>
+* @version ninguna
+* @access public 
+* @see no
+* 
+*/
+class TransaccionSportsbookMySqlDAO implements TransaccionSportsbookDAO{
+
+
+    /**
+    * Atributo Transaction transacción
+    *
+    * @var object
+    */
+    private $transaction;
+
+    /**
+     * Obtener la transacción de un objeto
+     *
+     * @return Objeto Transaction transacción
+     *
+     */
+    public function getTransaction()
+    {
+        return $this->transaction;
+    }
+
+    /**
+     * Modificar el atributo transacción del objeto
+     *
+     * @param Objeto $Transaction transacción
+     *
+     * @return no
+     *
+     */
+    public function setTransaction($transaction)
+    {
+        $this->transaction = $transaction;
+    }
+
+    /**
+    * Constructor de clase
+    *
+    *
+    * @param Objeto $transaction transaccion
+    *
+    * @return no
+    * @throws no
+    *
+    * @access public
+    * @see no
+    * @since no
+    * @deprecated no
+    */
+    public function __construct($transaction="")
+    {
+        if ($transaction == "") 
+        {
+            $transaction = new Transaction();
+            $this->transaction = $transaction;
+        }
+        else 
+        {
+            $this->transaction = $transaction;
+        }
+    }
+
+
+
+
+
+
+
+
+	/**
+	 * Obtener todos los registros condicionados por la 
+	 * llave primaria que se pasa como parámetro
+	 *
+	 * @param String $id llave primaria
+	 *
+	 * @return Array $ resultado de la consulta
+	 *
+	 */
+	public function load($id){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE transsport_id = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($id);
+		return $this->getRow($sqlQuery);
+	}
+
+	/**
+	 * Obtener todos los registros condicionados por la 
+	 * llave primaria que se pasa como parámetro
+	 *
+	 * @param String $id llave primaria
+	 *
+	 * @return Array $ resultado de la consulta
+	 *
+	 */
+	public function queryAll(){
+		$sql = 'SELECT * FROM transaccion_sportsbook';
+		$sqlQuery = new SqlQuery($sql);
+		return $this->getList($sqlQuery);
+	}
+	
+	/**
+	 * Obtener todos los registros
+	 * ordenadas por el nombre de la columna 
+	 * que se pasa como parámetro
+	 *
+	 * @param String $orderColumn nombre de la columna
+	 *
+	 * @return Array $ resultado de la consulta
+     *
+	 */
+	public function queryAllOrderBy($orderColumn){
+		$sql = 'SELECT * FROM transaccion_sportsbook ORDER BY '.$orderColumn;
+		$sqlQuery = new SqlQuery($sql);
+		return $this->getList($sqlQuery);
+	}
+	
+	/**
+ 	 * Eliminar todos los registros condicionados
+ 	 * por la llave primaria
+ 	 *
+ 	 * @param String $transsport_id llave primaria
+ 	 *
+	 * @return boolean $ resultado de la consulta
+     *
+ 	 */
+	public function delete($transsport_id){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE transsport_id = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($transsport_id);
+		return $this->executeUpdate($sqlQuery);
+	}
+	
+	/**
+ 	 * Insertar un registro en la base de datos
+ 	 *
+ 	 * @param Objeto transaccionSportsbook transaccionSportsbook
+ 	 *
+	 * @return String $id resultado de la consulta
+     *
+ 	 */
+	public function insert($transaccionSportsbook){
+		$sql = 'INSERT INTO transaccion_sportsbook (usuario_id, producto_id, vlr_apuesta, vlr_premio,tipo, estado, premiado, ticket_id, fecha_pago, mandante, clave, usucrea_id, usumodif_id,game_reference,cant_lineas,bet_status,premio_pagado,dir_ip,eliminado,freebet,betmode,fecha_cierre,fecha_maxpago,session,transaccion_wallet) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+
+
+		$sqlQuery = new SqlQuery($sql);
+
+        $sqlQuery->setNumber($transaccionSportsbook->usuarioId);
+		$sqlQuery->setNumber($transaccionSportsbook->productoId);
+		$sqlQuery->setNumber($transaccionSportsbook->vlrApuesta);
+        $sqlQuery->setNumber($transaccionSportsbook->vlrPremio);
+        $sqlQuery->set($transaccionSportsbook->tipo);
+		$sqlQuery->set($transaccionSportsbook->estado);
+		$sqlQuery->set($transaccionSportsbook->premiado);
+		$sqlQuery->setString($transaccionSportsbook->ticketId);
+		$sqlQuery->set($transaccionSportsbook->fechaPago);
+		$sqlQuery->setNumber($transaccionSportsbook->mandante);
+		$sqlQuery->set($transaccionSportsbook->clave);
+		$sqlQuery->setNumber($transaccionSportsbook->usucreaId);
+        $sqlQuery->setNumber($transaccionSportsbook->usumodifId);
+        $sqlQuery->set($transaccionSportsbook->gameReference);
+        $sqlQuery->setNumber($transaccionSportsbook->cantLineas);
+        $sqlQuery->set($transaccionSportsbook->betStatus);
+        $sqlQuery->set($transaccionSportsbook->premioPagado);
+        $sqlQuery->set($transaccionSportsbook->dirIp);
+        $sqlQuery->set($transaccionSportsbook->eliminado);
+        $sqlQuery->set($transaccionSportsbook->freebet);
+        $sqlQuery->set($transaccionSportsbook->betmode);
+        $sqlQuery->set($transaccionSportsbook->fechaCierre);
+        $sqlQuery->set($transaccionSportsbook->fechaMaxpago);
+        $sqlQuery->set($transaccionSportsbook->session);
+        $sqlQuery->set($transaccionSportsbook->transaccionWallet);
+
+		$id = $this->executeInsert($sqlQuery);	
+		$transaccionSportsbook->transsportId = $id;
+		return $id;
+	}
+
+	/**
+ 	 * Editar un registro en la base de datos
+ 	 *
+ 	 * @param Objeto transaccionSportsbook transaccionSportsbook
+ 	 *
+	 * @return boolean $ resultado de la consulta
+     *
+ 	 */
+	public function update($transaccionSportsbook){
+		$sql = 'UPDATE transaccion_sportsbook SET usuario_id = ?, producto_id = ?, vlr_apuesta = ?, vlr_premio = ?, tipo=?, estado = ?, premiado = ?, ticket_id = ?, fecha_pago = ?, mandante = ?, clave = ?, usucrea_id = ?, usumodif_id = ?,game_reference = ?,cant_lineas = ?,bet_status = ?,premio_pagado = ?,dir_ip = ?,eliminado = ?,freebet = ?,betmode = ?,fecha_cierre = ?,fecha_maxpago = ?,session = ?, transaccion_wallet = ? WHERE transsport_id = ?';
+		$sqlQuery = new SqlQuery($sql);
+		
+		$sqlQuery->setNumber($transaccionSportsbook->usuarioId);
+		$sqlQuery->setNumber($transaccionSportsbook->productoId);
+		$sqlQuery->setNumber($transaccionSportsbook->vlrApuesta);
+        $sqlQuery->setNumber($transaccionSportsbook->vlrPremio);
+        $sqlQuery->set($transaccionSportsbook->tipo);
+		$sqlQuery->set($transaccionSportsbook->estado);
+		$sqlQuery->set($transaccionSportsbook->premiado);
+		$sqlQuery->setString($transaccionSportsbook->ticketId);
+		$sqlQuery->set($transaccionSportsbook->fechaPago);
+		$sqlQuery->setNumber($transaccionSportsbook->mandante);
+		$sqlQuery->setString($transaccionSportsbook->clave);
+		$sqlQuery->setNumber($transaccionSportsbook->usucreaId);
+		$sqlQuery->setNumber($transaccionSportsbook->usumodifId);
+        $sqlQuery->setNumber($transaccionSportsbook->gameReference);
+        $sqlQuery->setNumber($transaccionSportsbook->cantLineas);
+        $sqlQuery->set($transaccionSportsbook->betStatus);
+        $sqlQuery->set($transaccionSportsbook->premioPagado);
+        $sqlQuery->set($transaccionSportsbook->dirIp);
+        $sqlQuery->set($transaccionSportsbook->eliminado);
+        $sqlQuery->set($transaccionSportsbook->freebet);
+        $sqlQuery->set($transaccionSportsbook->betmode);
+        $sqlQuery->set($transaccionSportsbook->fechaCierre);
+        $sqlQuery->set($transaccionSportsbook->fechaMaxpago);
+        $sqlQuery->set($transaccionSportsbook->session);
+        $sqlQuery->set($transaccionSportsbook->transaccionWallet);
+
+		$sqlQuery->setNumber($transaccionSportsbook->transsportId);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+	/**
+ 	 * Eliminar todas los registros de la base de datos
+ 	 *
+ 	 * @param no
+ 	 *
+	 * @return boolean $ resultado de la consulta
+     *
+ 	 */
+	public function clean(){
+		$sql = 'DELETE FROM transaccion_sportsbook';
+		$sqlQuery = new SqlQuery($sql);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+
+
+
+
+
+
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * la columna usuario_id sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value usuario_id requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+	public function queryByUsuarioId($value){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE usuario_id = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->getList($sqlQuery);
+	}
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * la columna producto_id sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value producto_id requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+	public function queryByProductoId($value){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE producto_id = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->getList($sqlQuery);
+	}
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * la columna vlr_apuesta sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value vlr_apuesta requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+	public function queryByValorTicket($value){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE vlr_apuesta = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->getList($sqlQuery);
+	}
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * la columna vlr_premio sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value vlr_premio requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+	public function queryByValorPremio($value){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE vlr_premio = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->getList($sqlQuery);
+	}
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * la columna estado sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value estado requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+	public function queryByEstado($value){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE estado = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->set($value);
+		return $this->getList($sqlQuery);
+	}
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * la columna premiado sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value premiado requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+	public function queryByPremiado($value){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE premiado = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->set($value);
+		return $this->getList($sqlQuery);
+	}
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * la columna ticket_id sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value ticket_id requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+	public function queryByTicketId($value){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE ticket_id = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setString($value);
+		return $this->getList($sqlQuery);
+	}
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * la columna transaccion_id sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value transaccion_id requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+	public function queryByTransaccionId($value){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE transaccion_id = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setString($value);
+		return $this->getList($sqlQuery);
+	}
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * la columna fecha_pago sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value fecha_pago requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+	public function queryByFechaPago($value){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE fecha_pago = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->set($value);
+		return $this->getList($sqlQuery);
+	}
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * la columna mandante sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value mandante requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+	public function queryByMandante($value){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE mandante = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->getList($sqlQuery);
+	}
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * la columna clave sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value clave requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+	public function queryByClave($value){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE clave = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setString($value);
+		return $this->getList($sqlQuery);
+	}
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * la columna usucrea_id sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value usucrea_id requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+	public function queryByUsucreaId($value){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE usucrea_id = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->getList($sqlQuery);
+	}
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * la columna fecha_crea sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value fecha_crea requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+	public function queryByFechaCrea($value){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE fecha_crea = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->set($value);
+		return $this->getList($sqlQuery);
+	}
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * la columna usumodif_id sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value usumodif_id requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+	public function queryByUsumodifId($value){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE usumodif_id = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->getList($sqlQuery);
+	}
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * la columna fecha_modif sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value fecha_modif requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+	public function queryByFechaModif($value){
+		$sql = 'SELECT * FROM transaccion_sportsbook WHERE fecha_modif = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->set($value);
+		return $this->getList($sqlQuery);
+	}
+
+
+
+
+
+
+
+
+   	/**
+   	* Realizar una consulta en la tabla de TransaccionSportsbook 'TransaccionSportsbook'
+   	* de una manera personalizada
+    *
+   	* @param String $select campos de consulta
+   	* @param String $sidx columna para ordenar
+   	* @param String $sord orden los datos asc | desc
+   	* @param String $start inicio de la consulta
+   	* @param String $limit limite de la consulta
+   	* @param String $filters condiciones de la consulta 
+  	* @param boolean $searchOn utilizar los filtros o no
+   	*
+	* @return Array $json resultado de la consulta
+   	*
+ 	*/
+    public function queryTransacciones($sidx,$sord,$start,$limit,$filters,$searchOn)
+    {
+
+
+      $where = " where 1=1 ";
+
+
+  		if($searchOn) {
+  			// Construye el where
+  			$filters = json_decode($filters);
+  			$whereArray = array();
+  			$rules = $filters->rules;
+  			$groupOperation = $filters->groupOp;
+  			$cont = 0;
+
+  			foreach($rules as $rule)
+  			{
+  				$fieldName = $rule->field;
+  				$fieldData = $rule->data;
+  				
+
+                $Helpers = new Helpers();
+
+                if($fieldName == 'registro.cedula'){
+                    $fieldData = $Helpers->encode_data_with_key($fieldData, $_ENV['SECRET_PASSPHRASE_DOCUMENT']);
+                }
+                if($fieldName == 'registro.celular'){
+                    $fieldData = $Helpers->encode_data_with_key($fieldData, $_ENV['SECRET_PASSPHRASE_PHONE']);
+                }
+                if($fieldName == 'usuario.cedula'){
+                    $fieldData = $Helpers->encode_data_with_key($fieldData, $_ENV['SECRET_PASSPHRASE_DOCUMENT']);
+                }
+                if($fieldName == 'usuario.login'){
+                    $fieldData = $Helpers->encode_data_with_key($fieldData, $_ENV['SECRET_PASSPHRASE_LOGIN']);
+                }
+                if($fieldName == 'usuario_mandante.email'){
+                    $fieldData = $Helpers->encode_data_with_key($fieldData, $_ENV['SECRET_PASSPHRASE_LOGIN']);
+                }
+                if($fieldName == 'punto_venta.email'){
+                    $fieldData = $Helpers->encode_data_with_key($fieldData, $_ENV['SECRET_PASSPHRASE_LOGIN']);
+                }
+                if($fieldName == 'usuario_sitebuilder.login'){
+                    $fieldData = $Helpers->encode_data_with_key($fieldData, $_ENV['SECRET_PASSPHRASE_LOGIN']);
+                }
+                switch ($rule->op) {
+  					case "eq":
+  						$fieldOperation = " = '".$fieldData."'";
+  						break;
+  					case "ne":
+  						$fieldOperation = " != '".$fieldData."'";
+  						break;
+  					case "lt":
+  						$fieldOperation = " < '".$fieldData."'";
+  						break;
+  					case "gt":
+  						$fieldOperation = " > '".$fieldData."'";
+  						break;
+  					case "le":
+  						$fieldOperation = " <= '".$fieldData."'";
+  						break;
+  					case "ge":
+  						$fieldOperation = " >= '".$fieldData."'";
+  						break;
+  					case "nu":
+  						$fieldOperation = " = ''";
+  						break;
+  					case "nn":
+  						$fieldOperation = " != ''";
+  						break;
+  					case "in":
+  						$fieldOperation = " IN (".$fieldData.")";
+  						break;
+  					case "ni":
+  						$fieldOperation = " NOT IN '".$fieldData."'";
+  						break;
+  					case "bw":
+  						$fieldOperation = " LIKE '".$fieldData."%'";
+  						break;
+  					case "bn":
+  						$fieldOperation = " NOT LIKE '".$fieldData."%'";
+  						break;
+  					case "ew":
+  						$fieldOperation = " LIKE '%".$fieldData."'";
+  						break;
+  					case "en":
+  						$fieldOperation = " NOT LIKE '%".$fieldData."'";
+  						break;
+  					case "cn":
+  						$fieldOperation = " LIKE '%".$fieldData."%'";
+  						break;
+  					case "nc":
+  						$fieldOperation = " NOT LIKE '%".$fieldData."%'";
+  						break;
+  					default:
+  						$fieldOperation = "";
+  						break;
+  				}
+  				if($fieldOperation != "") $whereArray[] = $fieldName.$fieldOperation;
+  				if (oldCount($whereArray)>0)
+  				{
+  					$where = $where . " " . $groupOperation . " ((" . $fieldName . " )) " . strtoupper($fieldOperation);
+  				}
+  				else
+  				{
+  					$where = "";
+  				}
+  			}
+
+		  }
+		  
+
+   
+		  $sql = "SELECT count(*) count FROM transaccion_sportsbook INNER JOIN producto_mandante ON (producto_mandante.prodmandante_id=transaccion_sportsbook.producto_id) INNER JOIN producto ON (producto.producto_id=producto_mandante.producto_id) INNER JOIN proveedor ON (proveedor.proveedor_id = producto.proveedor_id) " . $where;
+		  
+
+        $sqlQuery = new SqlQuery($sql);
+
+        $count = $this->execute2($sqlQuery);
+		$sql = "SELECT transaccion_sportsbook.*,producto.*,producto_mandante.*,proveedor.* FROM transaccion_sportsbook INNER JOIN producto_mandante ON (producto_mandante.prodmandante_id=transaccion_sportsbook.producto_id) INNER JOIN producto ON (producto.producto_id=producto_mandante.producto_id) INNER JOIN proveedor ON (proveedor.proveedor_id = producto.proveedor_id) " . $where ." " . " order by " . $sidx . " " . $sord . " LIMIT " . $start . " , " . $limit;
+		
+
+        $sqlQuery = new SqlQuery($sql);
+
+        $result = $this->execute2($sqlQuery);
+
+        $json = '{ "count" : '.json_encode($count). ', "data" : '.json_encode($result).'}';
+
+        return  $json;
+    }
+
+   	/**
+   	* Realizar una consulta en la tabla de TransaccionSportsbook 'TransaccionSportsbook'
+   	* de una manera personalizada
+    *
+   	* @param String $select campos de consulta
+   	* @param String $sidx columna para ordenar
+   	* @param String $sord orden los datos asc | desc
+   	* @param String $start inicio de la consulta
+   	* @param String $limit limite de la consulta
+   	* @param String $filters condiciones de la consulta 
+  	* @param boolean $searchOn utilizar los filtros o no
+   	* @param String $grouping columna para agrupar
+   	*
+	* @return Array $json resultado de la consulta
+   	*
+ 	*/
+	public function queryTransaccionesCustom($select,$sidx,$sord,$start,$limit,$filters,$searchOn,$grouping)
+    {
+
+
+      $where = " where 1=1 ";
+
+		$Helpers = new Helpers();
+
+  		if($searchOn) {
+  			// Construye el where
+  			$filters = json_decode($filters);
+  			$whereArray = array();
+  			$rules = $filters->rules;
+  			$groupOperation = $filters->groupOp;
+  			$cont = 0;
+
+  			foreach($rules as $rule)
+  			{
+  				$fieldName = $Helpers->set_custom_field($rule->field);
+  				$fieldData = $rule->data;
+  				
+
+                $Helpers = new Helpers();
+
+                if($fieldName == 'registro.cedula'){
+                    $fieldData = $Helpers->encode_data_with_key($fieldData, $_ENV['SECRET_PASSPHRASE_DOCUMENT']);
+                }
+                if($fieldName == 'registro.celular'){
+                    $fieldData = $Helpers->encode_data_with_key($fieldData, $_ENV['SECRET_PASSPHRASE_PHONE']);
+                }
+                if($fieldName == 'usuario.cedula'){
+                    $fieldData = $Helpers->encode_data_with_key($fieldData, $_ENV['SECRET_PASSPHRASE_DOCUMENT']);
+                }
+                if($fieldName == 'usuario.login'){
+                    $fieldData = $Helpers->encode_data_with_key($fieldData, $_ENV['SECRET_PASSPHRASE_LOGIN']);
+                }
+                if($fieldName == 'usuario_mandante.email'){
+                    $fieldData = $Helpers->encode_data_with_key($fieldData, $_ENV['SECRET_PASSPHRASE_LOGIN']);
+                }
+                if($fieldName == 'punto_venta.email'){
+                    $fieldData = $Helpers->encode_data_with_key($fieldData, $_ENV['SECRET_PASSPHRASE_LOGIN']);
+                }
+                if($fieldName == 'usuario_sitebuilder.login'){
+                    $fieldData = $Helpers->encode_data_with_key($fieldData, $_ENV['SECRET_PASSPHRASE_LOGIN']);
+                }
+                switch ($rule->op) {
+  					case "eq":
+  						$fieldOperation = " = '".$fieldData."'";
+  						break;
+  					case "ne":
+  						$fieldOperation = " != '".$fieldData."'";
+  						break;
+  					case "lt":
+  						$fieldOperation = " < '".$fieldData."'";
+  						break;
+  					case "gt":
+  						$fieldOperation = " > '".$fieldData."'";
+  						break;
+  					case "le":
+  						$fieldOperation = " <= '".$fieldData."'";
+  						break;
+  					case "ge":
+  						$fieldOperation = " >= '".$fieldData."'";
+  						break;
+  					case "nu":
+  						$fieldOperation = " = ''";
+  						break;
+  					case "nn":
+  						$fieldOperation = " != ''";
+  						break;
+  					case "in":
+  						$fieldOperation = " IN (".$fieldData.")";
+  						break;
+  					case "ni":
+  						$fieldOperation = " NOT IN '".$fieldData."'";
+  						break;
+  					case "bw":
+  						$fieldOperation = " LIKE '".$fieldData."%'";
+  						break;
+  					case "bn":
+  						$fieldOperation = " NOT LIKE '".$fieldData."%'";
+  						break;
+  					case "ew":
+  						$fieldOperation = " LIKE '%".$fieldData."'";
+  						break;
+  					case "en":
+  						$fieldOperation = " NOT LIKE '%".$fieldData."'";
+  						break;
+  					case "cn":
+  						$fieldOperation = " LIKE '%".$fieldData."%'";
+  						break;
+  					case "nc":
+  						$fieldOperation = " NOT LIKE '%".$fieldData."%'";
+  						break;
+  					default:
+  						$fieldOperation = "";
+  						break;
+  				}
+  				if($fieldOperation != "") $whereArray[] = $fieldName.$fieldOperation;
+  				if (oldCount($whereArray)>0)
+  				{
+  					$where = $where . " " . $groupOperation . " ((" . $fieldName . " )) " . strtoupper($fieldOperation);
+  				}
+  				else
+  				{
+  					$where = "";
+  				}
+  			}
+
+		  }
+
+
+        if($grouping != ""){
+            $where = $where . " GROUP BY " . $grouping;
+        }
+
+   
+		  $sql = "SELECT count(*) count FROM transaccion_sportsbook INNER JOIN producto_mandante ON (producto_mandante.prodmandante_id=transaccion_sportsbook.producto_id) INNER JOIN producto ON (producto.producto_id=producto_mandante.producto_id) INNER JOIN proveedor ON (proveedor.proveedor_id = producto.proveedor_id) INNER JOIN usuario_mandante ON(usuario_mandante.usumandante_id =transaccion_sportsbook.usuario_id)  LEFT OUTER JOIN usuario ON(usuario_mandante.usuario_mandante =usuario.usuario_id) " . $where;
+
+        $sqlQuery = new SqlQuery($sql);
+
+        $count = $this->execute2($sqlQuery);
+		$sql = "SELECT ".$select." FROM transaccion_sportsbook INNER JOIN producto_mandante ON (producto_mandante.prodmandante_id=transaccion_sportsbook.producto_id) INNER JOIN producto ON (producto.producto_id=producto_mandante.producto_id) INNER JOIN proveedor ON (proveedor.proveedor_id = producto.proveedor_id) INNER JOIN usuario_mandante ON(usuario_mandante.usumandante_id =transaccion_sportsbook.usuario_id)  LEFT OUTER JOIN usuario ON(usuario_mandante.usuario_mandante =usuario.usuario_id) " . $where ." " . " order by " . $sidx . " " . $sord . " LIMIT " . $start . " , " . $limit;
+
+		$sqlQuery = new SqlQuery($sql);
+
+        $result = $Helpers->process_data($this->execute2($sqlQuery));
+
+        $json = '{ "count" : '.json_encode($count). ', "data" : '.json_encode($result).'}';
+
+        return  $json;
+    }
+
+
+
+
+
+
+
+	/**
+ 	 * Obtener todos los registros donde se encuentre que
+ 	 * las columnas ticketId y usuario_id sean iguales a los
+ 	 * valores pasados como parámetros
+ 	 *
+ 	 * @param String $value ticketId requerido
+  	 * @param String $value usuario_id requerido
+ 	 *
+	 * @return Array $ resultado de la consulta
+	 *
+ 	 */
+    public function existsTicketId($ticketId,$usuario_id){
+        $sql = 'SELECT * FROM transaccion_sportsbook WHERE ticket_id = ? AND usuario_id = ?';
+        $sqlQuery = new SqlQuery($sql);
+        $sqlQuery->setString($ticketId);
+        $sqlQuery->setNumber($usuario_id);
+        return $this->getList($sqlQuery);
+    }
+
+
+
+	/**
+ 	 * Eliminar todos los registros donde se encuentre que
+ 	 * la columna usuario_id sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value usuario_id requerido
+ 	 *
+ 	 * @return boolean $ resultado de la ejecución
+ 	 *
+ 	 */
+	public function deleteByUsuarioId($value){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE usuario_id = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+	/**
+ 	 * Eliminar todos los registros donde se encuentre que
+ 	 * la columna producto_id sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value producto_id requerido
+ 	 *
+ 	 * @return boolean $ resultado de la ejecución
+ 	 *
+ 	 */
+	public function deleteByProductoId($value){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE producto_id = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+	/**
+ 	 * Eliminar todos los registros donde se encuentre que
+ 	 * la columna vlr_apuesta sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value vlr_apuesta requerido
+ 	 *
+ 	 * @return boolean $ resultado de la ejecución
+ 	 *
+ 	 */
+	public function deleteByValorTicket($value){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE vlr_apuesta = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+	/**
+ 	 * Eliminar todos los registros donde se encuentre que
+ 	 * la columna vlr_premio sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value vlr_premio requerido
+ 	 *
+ 	 * @return boolean $ resultado de la ejecución
+ 	 *
+ 	 */
+	public function deleteByValorPremio($value){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE vlr_premio = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+	/**
+ 	 * Eliminar todos los registros donde se encuentre que
+ 	 * la columna estado sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value estado requerido
+ 	 *
+ 	 * @return boolean $ resultado de la ejecución
+ 	 *
+ 	 */
+	public function deleteByEstado($value){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE estado = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->set($value);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+	/**
+ 	 * Eliminar todos los registros donde se encuentre que
+ 	 * la columna premiado sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value premiado requerido
+ 	 *
+ 	 * @return boolean $ resultado de la ejecución
+ 	 *
+ 	 */
+	public function deleteByPremiado($value){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE premiado = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->set($value);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+	/**
+ 	 * Eliminar todos los registros donde se encuentre que
+ 	 * la columna ticket_id sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value ticket_id requerido
+ 	 *
+ 	 * @return boolean $ resultado de la ejecución
+ 	 *
+ 	 */
+	public function deleteByTicketId($value){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE ticket_id = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+	/**
+ 	 * Eliminar todos los registros donde se encuentre que
+ 	 * la columna transaccion_id sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value transaccion_id requerido
+ 	 *
+ 	 * @return boolean $ resultado de la ejecución
+ 	 *
+ 	 */
+	public function deleteByTransaccionId($value){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE transaccion_id = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+	/**
+ 	 * Eliminar todos los registros donde se encuentre que
+ 	 * la columna fecha_pago sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value fecha_pago requerido
+ 	 *
+ 	 * @return boolean $ resultado de la ejecución
+ 	 *
+ 	 */
+	public function deleteByFechaPago($value){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE fecha_pago = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->set($value);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+	/**
+ 	 * Eliminar todos los registros donde se encuentre que
+ 	 * la columna mandante sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value mandante requerido
+ 	 *
+ 	 * @return boolean $ resultado de la ejecución
+ 	 *
+ 	 */
+	public function deleteByMandante($value){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE mandante = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+	/**
+ 	 * Eliminar todos los registros donde se encuentre que
+ 	 * la columna clave sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value clave requerido
+ 	 *
+ 	 * @return boolean $ resultado de la ejecución
+ 	 *
+ 	 */
+	public function deleteByClave($value){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE clave = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+	/**
+ 	 * Eliminar todos los registros donde se encuentre que
+ 	 * la columna usucrea_id sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value usucrea_id requerido
+ 	 *
+ 	 * @return boolean $ resultado de la ejecución
+ 	 *
+ 	 */
+	public function deleteByUsucreaId($value){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE usucrea_id = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+	/**
+ 	 * Eliminar todos los registros donde se encuentre que
+ 	 * la columna fecha_crea sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value fecha_crea requerido
+ 	 *
+ 	 * @return boolean $ resultado de la ejecución
+ 	 *
+ 	 */
+	public function deleteByFechaCrea($value){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE fecha_crea = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->set($value);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+	/**
+ 	 * Eliminar todos los registros donde se encuentre que
+ 	 * la columna usumodif_id sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value usumodif_id requerido
+ 	 *
+ 	 * @return boolean $ resultado de la ejecución
+ 	 *
+ 	 */
+	public function deleteByUsumodifId($value){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE usumodif_id = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->setNumber($value);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+	/**
+ 	 * Eliminar todos los registros donde se encuentre que
+ 	 * la columna fecha_modif sea igual al valor pasado como parámetro
+ 	 *
+ 	 * @param String $value fecha_modif requerido
+ 	 *
+ 	 * @return boolean $ resultado de la ejecución
+ 	 *
+ 	 */
+	public function deleteByFechaModif($value){
+		$sql = 'DELETE FROM transaccion_sportsbook WHERE fecha_modif = ?';
+		$sqlQuery = new SqlQuery($sql);
+		$sqlQuery->set($value);
+		return $this->executeUpdate($sqlQuery);
+	}
+
+
+
+
+
+
+
+
+
+
+	
+	/**
+ 	 * Crear y devolver un objeto del tipo TransaccionSportsbook
+ 	 * con los valores de una consulta sql
+ 	 * 
+ 	 *
+ 	 * @param Arreglo $row arreglo asociativo
+ 	 *
+ 	 * @return Objeto $transaccionSportsbook TransaccionSportsbook
+ 	 *
+ 	 * @access protected
+ 	 *
+ 	 */
+	protected function readRow($row){
+		$transaccionSportsbook = new TransaccionSportsbook();
+		
+		$transaccionSportsbook->transsportId = $row['transsport_id'];
+		$transaccionSportsbook->usuarioId = $row['usuario_id'];
+		$transaccionSportsbook->productoId = $row['producto_id'];
+		$transaccionSportsbook->vlrApuesta = $row['vlr_apuesta'];
+        $transaccionSportsbook->vlrPremio = $row['vlr_premio'];
+        $transaccionSportsbook->tipo = $row['tipo'];
+		$transaccionSportsbook->estado = $row['estado'];
+		$transaccionSportsbook->premiado = $row['premiado'];
+		$transaccionSportsbook->ticketId = $row['ticket_id'];
+		$transaccionSportsbook->fechaPago = $row['fecha_pago'];
+		$transaccionSportsbook->mandante = $row['mandante'];
+		$transaccionSportsbook->clave = $row['clave'];
+		$transaccionSportsbook->usucreaId = $row['usucrea_id'];
+		$transaccionSportsbook->fechaCrea = $row['fecha_crea'];
+		$transaccionSportsbook->usumodifId = $row['usumodif_id'];
+		$transaccionSportsbook->fechaModif = $row['fecha_modif'];
+
+        $transaccionSportsbook->gameReference = $row['game_reference'];
+        $transaccionSportsbook->cantLineas = $row['cant_lineas'];
+        $transaccionSportsbook->betStatus = $row['bet_status'];
+        $transaccionSportsbook->premioPagado = $row['premio_pagado'];
+        $transaccionSportsbook->dirIp = $row['dir_ip'];
+        $transaccionSportsbook->eliminado = $row['eliminado'];
+        $transaccionSportsbook->freebet = $row['freebet'];
+        $transaccionSportsbook->betmode = $row['betmode'];
+        $transaccionSportsbook->fechaCierre = $row['fecha_cierre'];
+        $transaccionSportsbook->fechaMaxpago = $row['fecha_maxpago'];
+        $transaccionSportsbook->session = $row['session'];
+        $transaccionSportsbook->transaccionWallet = $row['transaccion_wallet'];
+
+		return $transaccionSportsbook;
+	}
+	
+	/**
+ 	 * Ejecutar una consulta sql y devolver los datos
+ 	 * como un arreglo asociativo 
+ 	 * 
+ 	 *
+ 	 * @param String $sqlQuery consulta sql
+ 	 *
+ 	 * @return Array $ret arreglo indexado
+ 	 *
+ 	 * @access protected
+ 	 *
+ 	 */
+	protected function getList($sqlQuery){
+		$tab = QueryExecutor::execute($this->transaction,$sqlQuery);
+		$ret = array();
+		for($i=0;$i<oldCount($tab);$i++){
+			$ret[$i] = $this->readRow($tab[$i]);
+		}
+		return $ret;
+	}
+
+	/**
+ 	 * Ejecutar una consulta sql y devolver el resultado como un arreglo
+ 	 * 
+ 	 *
+ 	 * @param String $sqlQuery consulta sql
+ 	 *
+ 	 * @return Array $ resultado de la ejecución
+ 	 *
+ 	 * @access protected
+ 	 *
+ 	 */
+	protected function getRow($sqlQuery){
+		$tab = QueryExecutor::execute($this->transaction,$sqlQuery);
+		if(oldCount($tab)==0){
+			return null;
+		}
+		return $this->readRow($tab[0]);		
+	}
+	
+	/**
+ 	 * Ejecutar una consulta sql
+ 	 * 
+ 	 *
+ 	 * @param String $sqlQuery consulta sql
+ 	 *
+ 	 * @return Array $ resultado de la ejecución
+ 	 *
+ 	 * @access protected
+ 	 *
+ 	 */
+	protected function execute($sqlQuery){
+		return QueryExecutor::execute($this->transaction,$sqlQuery);
+	}
+	
+	/**
+ 	 * Ejecutar una consulta sql
+ 	 * 
+ 	 *
+ 	 * @param String $sqlQuery consulta sql
+ 	 *
+ 	 * @return Array $ resultado de la ejecución
+ 	 *
+ 	 * @access protected
+ 	 *
+ 	 */
+    protected function execute2($sqlQuery)
+    {
+        return QueryExecutor::execute2($this->transaction, $sqlQuery);
+    }
+
+	/**
+ 	 * Ejecutar una consulta sql como update
+ 	 * 
+ 	 *
+ 	 * @param String $sqlQuery consulta sql
+ 	 *
+ 	 * @return Array $ resultado de la ejecución
+ 	 *
+ 	 * @access protected
+ 	 *
+ 	 */
+	protected function executeUpdate($sqlQuery){
+		return QueryExecutor::executeUpdate($this->transaction,$sqlQuery);
+	}
+
+	/**
+ 	 * Ejecutar una consulta sql como select
+ 	 * 
+ 	 *
+ 	 * @param String $sqlQuery consulta sql
+ 	 *
+ 	 * @return Array $ resultado de la ejecución
+ 	 *
+ 	 * @access protected
+ 	 *
+ 	 */
+	protected function querySingleResult($sqlQuery){
+		return QueryExecutor::queryForString($this->transaction,$sqlQuery);
+	}
+
+	/**
+ 	 * Ejecutar una consulta sql como insert
+ 	 * 
+ 	 *
+ 	 * @param String $sqlQuery consulta sql
+ 	 *
+ 	 * @return Array $ resultado de la ejecución
+ 	 *
+ 	 * @access protected
+ 	 *
+ 	 */
+	protected function executeInsert($sqlQuery){
+		return QueryExecutor::executeInsert($this->transaction,$sqlQuery);
+	}
+}
+?>

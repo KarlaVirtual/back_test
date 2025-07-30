@@ -1,0 +1,169 @@
+<?php
+
+/**
+ * Clase Skrill para manejar integraciones de pagos con el proveedor Skrill.
+ *
+ * Esta clase permite procesar confirmaciones de transacciones y actualizar
+ * el estado de las mismas en el sistema según la respuesta del proveedor.
+ *
+ * @category Red
+ * @package  API
+ * @author   Desconocido
+ * @version  1.0.0
+ * @since    2025-04-25
+ */
+
+namespace Backend\Integrations\Payment;
+
+use Backend\dto\TransaccionProducto;
+
+/**
+ * Clase que representa la integración con el proveedor de pagos Skrill.
+ *
+ * Proporciona métodos para procesar confirmaciones de transacciones y
+ * actualizar su estado en el sistema según las respuestas del proveedor.
+ */
+class Skrill
+{
+    /**
+     * Identificador de la factura o transacción.
+     *
+     * @var mixed
+     */
+    var $invoice;
+
+    /**
+     * Identificador del usuario asociado a la transacción.
+     *
+     * @var mixed
+     */
+    var $usuario_id;
+
+    /**
+     * Identificador del documento relacionado con la transacción.
+     *
+     * @var mixed
+     */
+    var $documento_id;
+
+    /**
+     * Valor monetario de la transacción.
+     *
+     * @var mixed
+     */
+    var $valor;
+
+    /**
+     * Código de control para la transacción.
+     *
+     * @var mixed
+     */
+    var $control;
+
+    /**
+     * Resultado de la transacción proporcionado por el proveedor.
+     *
+     * @var mixed
+     */
+    var $result;
+
+    /**
+     * Constructor de la clase Skrill.
+     *
+     * @param mixed $invoice      ID de la factura.
+     * @param mixed $usuario_id   ID del usuario.
+     * @param mixed $documento_id ID del documento.
+     * @param mixed $valor        Valor de la transacción.
+     * @param mixed $control      Código de control.
+     * @param mixed $result       Resultado de la transacción.
+     */
+    public function __construct($invoice, $usuario_id, $documento_id, $valor, $control, $result)
+    {
+        $this->invoice = $invoice;
+        $this->usuario_id = $usuario_id;
+        $this->documento_id = $documento_id;
+        $this->valor = $valor;
+        $this->control = $control;
+        $this->result = $result;
+    }
+
+    /**
+     * Procesa la confirmación de una transacción.
+     *
+     * Según el resultado proporcionado por Skrill, actualiza el estado de la
+     * transacción en el sistema y registra un log con los detalles.
+     *
+     * @param array $data Datos proporcionados por Skrill para la transacción.
+     *
+     * @return void
+     */
+    public function confirmation($data)
+    {
+        // ID Transacción en nuestro sistema
+        $transaccion_id = $this->invoice;
+
+        // Tipo que genera el log (A: Automatico, M: Manual)
+        $tipo_genera = 'A';
+
+        // Valores que me trae el proveedor para auditoría
+        $t_value = json_encode($data);
+
+        switch ($this->result) {
+            case 7:
+
+                // Asignamos variables por tipo de transaccion
+
+                // Estado especial por proveedor (A:Aprobado,P:Pendiente,R:Rechazada)
+                $estado = 'P';
+
+                // Comentario personalizado para el log
+                $comentario = 'Pendiente por Skrill ';
+
+
+                // Obtenemos la transaccion
+
+                $TransaccionProducto = new TransaccionProducto($transaccion_id);
+
+                $TransaccionProducto->setPendiente($transaccion_id, $tipo_genera, $estado, $comentario, $t_value);
+
+                break;
+
+            case 9:
+
+                // Asignamos variables por tipo de transaccion
+
+                // Estado especial por proveedor (A:Aprobado,P:Pendiente,R:Rechazada)
+                $estado = 'A';
+
+                // Comentario personalizado para el log
+                $comentario = 'Aprobada por Skrill ';
+
+                // Obtenemos la transaccion
+
+                $TransaccionProducto = new TransaccionProducto($transaccion_id);
+
+                $TransaccionProducto->setAprobada($transaccion_id, $tipo_genera, $estado, $comentario, $t_value, $this->documento_id);
+
+                break;
+
+            case 8:
+
+                // Asignamos variables por tipo de transaccion
+
+                // Estado especial por proveedor (A:Aprobado,P:Pendiente,R:Rechazada)
+                $estado = 'R';
+
+                // Comentario personalizado para el log
+                $comentario = 'Rechazada por Skrill ';
+
+                // Obtenemos la transaccion
+
+                $TransaccionProducto = new TransaccionProducto($transaccion_id);
+
+                $TransaccionProducto->setRechazada($transaccion_id, $tipo_genera, $estado, $comentario, $t_value);
+
+                break;
+        }
+    }
+
+}

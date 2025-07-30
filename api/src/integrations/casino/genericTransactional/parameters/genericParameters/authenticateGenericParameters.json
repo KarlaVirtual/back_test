@@ -1,0 +1,20 @@
+{
+    "userName":"body->userName",
+    "password":"body->password",
+    "portalCode":"body->playerId",
+    "sessionId":"body->sessionId",
+    "externalId":"body->externalUserId",
+    "sidUpdate":"null",
+    "app":"body->app_data",
+    "operatorId":"body->operatorId",
+    "token":"body->token",
+    "timestamp":"body->timestamp",
+    "signature":"body->signature",
+    "playerId":"body->playerId",
+    "platformType":"body->platformType",
+    "merch_id":"body->merch_id",
+    "merch_pwd":"body->pwd",
+    "ip":"body->ip",
+    "session_token":"body->session_token",
+    "currency":"body->currency"
+}

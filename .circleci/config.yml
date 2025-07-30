@@ -1,0 +1,680 @@
+version: 2.1
+
+
+executors:
+  default:
+    docker:
+      - image: circleci/python:3.8
+    working_directory: ~/repo
+
+jobs:
+  build-and-deploy-enviromentdev:
+    executor: default
+    steps:
+      - checkout
+
+      - run:
+          name: Check and Create `.releaserc` if not present
+          command: |
+            if [ ! -f .releaserc ]; then
+              echo '{
+                "branches": ["main", "enviromentdev"],
+                "plugins": [
+                  "@semantic-release/commit-analyzer",
+                  "@semantic-release/release-notes-generator",
+                  "@semantic-release/changelog"
+                ]
+              }' > .releaserc
+            fi
+
+      - run:
+          name: Checkout a la rama específica
+          command: |
+            git fetch origin  # Asegúrate de tener la información más reciente
+            git checkout enviromentdev
+
+      - run:
+          name: Set up Node.js
+          command: |
+            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+
+      - run:
+          name: Create .env file
+          command: echo "VITE_API_URL=${DEV_VITE_API_URL}" >> .env
+
+      - run:
+          name: Print .env file
+          command: cat .env
+
+      - run:
+          name: Pre-Install Dependencies
+          command: |
+            rm -rf node_modules package-lock.json
+            npm cache clean --force
+
+      - run:
+          name: Install semantic-release
+          command: npm install --save-dev semantic-release @semantic-release/changelog @semantic-release/git
+
+      - run:
+          name: Run semantic-release
+          command: npx semantic-release
+          environment:
+            GITHUB_TOKEN: $PERSONAL_ACCESS_TOKEN
+
+
+      - run:
+          name: Print the value of PERSONAL_ACCESS_TOKEN
+          command: |
+            echo "PERSONAL_ACCESS_TOKEN is: $PERSONAL_ACCESS_TOKEN"
+
+      - run:
+          name: List directories and files after copying
+          command: ls -R
+
+      - run:
+          name: Commit and Push Changes
+          command: |
+            git config --global user.name "deploy-auto"
+            git config --global user.email "tecnologiageneral@virtualsoft.tech"
+            
+            # Configurar cómo reconciliar ramas divergentes al hacer git pull
+            git config pull.rebase false  # Cambia esto a 'true' si prefieres rebase
+            
+            # Agregar cambios y hacer commit
+            git add CHANGELOG.md
+            git commit -m "chore: update CHANGELOG.md [skip ci]" || echo "No changes to commit"
+            
+            # Realizar pull para integrar cambios de la rama remota
+            git pull origin enviromentdev --allow-unrelated-histories -s ours
+            git push origin HEAD:enviromentdev
+          environment:
+            PERSONAL_ACCESS_TOKEN: $PERSONAL_ACCESS_TOKEN
+
+  build-and-deploy-enviromentdev-ansible:
+    machine: true
+    resource_class: mudkdqbrj2wwlblhi1casx/enviromentdev
+    steps:
+      - checkout
+      - run:
+          name: Checkout a la rama específica
+          command: |
+            git fetch origin  # Asegúrate de tener la información más reciente
+            git checkout enviromentdev
+
+
+      - run:
+          name: Mostrar Usuario de CentOS
+          command: |
+            echo "El usuario de CentOS que está ejecutando las acciones es $USER"
+
+      - run:
+          name: Set vars to .env
+          command: |
+            # Crea un archivo .env con todas las variables del contexto
+            echo "APP_PASSKEY=${APP_PASSKEY}" > .env
+            echo "ARM_KEY_ALGARIN=${ARM_KEY_ALGARIN}" >> .env
+            echo "ARM_KEY_DANIEL=${ARM_KEY_DANIEL}" >> .env
+            echo "ARM_KEY_JERSON=${ARM_KEY_JERSON}" >> .env
+            echo "ARM_KEY_JULIAN=${ARM_KEY_JULIAN}" >> .env
+            echo "DB_HOST=${DB_HOST}" >> .env
+            echo "DB_NAME=${DB_NAME}" >> .env
+            echo "DB_PASSWORD=${DB_PASSWORD}" >> .env
+            echo "DB_USER=${DB_USER}" >> .env
+            echo "DB_HOST_ALTER=${DB_HOST_ALTER}" >> .env
+            echo "DB_NAME_ALTER=${DB_NAME_ALTER}" >> .env
+            echo "DB_USER_ALTER=${DB_USER_ALTER}" >> .env
+            echo "DB_PASSWORD_ALTER=${DB_PASSWORD_ALTER}" >> .env
+            echo "ENV_TYPE=${ENV_TYPE}" >> .env
+            echo "REDIS_HOST=${REDIS_HOST}" >> .env
+            echo "REDIS_PASSWORD=${REDIS_PASSWORD}" >> .env
+            echo "REDIS_PORT=${REDIS_PORT}" >> .env
+            echo "SECRET_PASSPHRASE_ADDRESS=${SECRET_PASSPHRASE_ADDRESS}" >> .env
+            echo "SECRET_PASSPHRASE_DOCUMENT=${SECRET_PASSPHRASE_DOCUMENT}" >> .env
+            echo "SECRET_PASSPHRASE_GENDER=${SECRET_PASSPHRASE_GENDER}" >> .env
+            echo "SECRET_PASSPHRASE_LASTNAME=${SECRET_PASSPHRASE_LASTNAME}" >> .env
+            echo "SECRET_PASSPHRASE_LOGIN=${SECRET_PASSPHRASE_LOGIN}" >> .env
+            echo "SECRET_PASSPHRASE_NAME=${SECRET_PASSPHRASE_NAME}" >> .env
+            echo "SECRET_PASSPHRASE_PHONE=${SECRET_PASSPHRASE_PHONE}" >> .env
+            echo "$PWD/.env"
+
+      - run:
+          name: Show .env
+          command: |
+            cp $PWD/.env $PWD/api/.env
+            cat "$PWD/api/.env"
+
+      - run:
+          name: Install Ansible if not present
+          command: |
+            if ! command -v ansible-playbook &> /dev/null
+            then
+              echo "Ansible not found. Installing Ansible."
+              sudo yum install -y ansible
+            else
+              echo "Ansible is already installed."
+            fi
+
+      - run:
+          name: Save .env contents to variable with replacements
+          command: |
+            # Leer el contenido del archivo .env y reemplazar los saltos de línea con ####A####
+            ENV_CONTENT=$(cat .env | sed ':a;N;$!ba;s/\n/####A####/g')
+            echo "ENV_CONTENT=$ENV_CONTENT" >> $BASH_ENV
+
+      - run:
+          name: Save PERSONAL_ACCESS_TOKEN
+          command: |
+            # Leer el contenido del archivo .env y reemplazar los saltos de línea con ####A####
+            echo "PERSONAL_ACCESS_TOKEN=${PERSONAL_ACCESS_TOKEN}" >> $BASH_ENV
+      - run:
+          name: Save PERSONAL_ACCESS_TOKEN
+          command: |
+            # Leer el contenido del archivo .env y reemplazar los saltos de línea con ####A####
+            echo "PERSONAL_ACCESS_TOKEN:$PERSONAL_ACCESS_TOKEN"
+
+      - run:
+          name: List directories and files after copying
+          command: ls -R
+
+      - run:
+          name: Run Ansible playbook
+          command: |
+            ansible-playbook -i /home/serversconfig/inventory/hosts -l serversdev /home/serversconfig/playbook.yml --extra-vars "github_token=${PERSONAL_ACCESS_TOKEN} env_content=${ENV_CONTENT}" -vvv > /tmp/ansible_output.log 2>&1
+            echo $? > /tmp/ansible_status
+          environment:
+            ENV_CONTENT: $ENV_CONTENT
+            PERSONAL_ACCESS_TOKEN: $PERSONAL_ACCESS_TOKEN
+            ANSIBLE_HOST_KEY_CHECKING: false
+          when: always
+
+      - run:
+          name: Get current date
+          command: |
+            echo "DATE='$(date)'" >> $BASH_ENV
+            
+            # Leer el archivo de log y buscar el resumen de PLAY RECAP
+            if grep -q 'PLAY RECAP' /tmp/ansible_output.log; then
+              if grep -q 'failed=0' /tmp/ansible_output.log; then
+                echo "ANSIBLE_STATUS='✅ Success'" >> $BASH_ENV
+              else
+                echo "ANSIBLE_STATUS='❌ Error'" >> $BASH_ENV
+              fi
+            else
+              echo "ANSIBLE_STATUS='❌ Error NO PLAY RECAP'" >> $BASH_ENV
+            fi
+
+          when: always
+          continue-on-error: true
+
+
+      - run:
+          name: Mostrar el contenido de $BASH_ENV para depuración
+          command: cat $BASH_ENV
+
+      - run:
+          name: Notify Slack
+          command: |
+            echo "DATE=${DATE}"
+            echo "ANSIBLE_STATUS=${ANSIBLE_STATUS}"
+            # Enviar notificación a Slack
+            curl -X POST -H 'Content-type: application/json' --data '{"text":"🚀 *Deploy Code*: *BackendDev* \n📅 Date: *'"${DATE}"'* \nStatus: '"${ANSIBLE_STATUS}"'"}' ${SLACK_WEBHOOK_URL}
+          when: always
+          continue-on-error: true
+
+  build-and-deploy-enviromentdevintegrations-ansible:
+    machine: true
+    resource_class: mudkdqbrj2wwlblhi1casx/enviromentdev
+    steps:
+      - checkout
+      - run:
+          name: Checkout a la rama específica
+          command: |
+            git fetch origin  # Asegúrate de tener la información más reciente
+            git checkout enviromentdevintegrations
+
+
+      - run:
+          name: Mostrar Usuario de CentOS
+          command: |
+            echo "El usuario de CentOS que está ejecutando las acciones es $USER"
+
+      - run:
+          name: Set vars to .env
+          command: |
+            # Crea un archivo .env con todas las variables del contexto
+            echo "APP_PASSKEY=${APP_PASSKEY}" > .env
+            echo "ARM_KEY_ALGARIN=${ARM_KEY_ALGARIN}" >> .env
+            echo "ARM_KEY_DANIEL=${ARM_KEY_DANIEL}" >> .env
+            echo "ARM_KEY_JERSON=${ARM_KEY_JERSON}" >> .env
+            echo "ARM_KEY_JULIAN=${ARM_KEY_JULIAN}" >> .env
+            echo "DB_HOST=${DB_HOST}" >> .env
+            echo "DB_NAME=${DB_NAME}" >> .env
+            echo "DB_PASSWORD=${DB_PASSWORD}" >> .env
+            echo "DB_USER=${DB_USER}" >> .env
+            echo "DB_HOST_ALTER=${DB_HOST_ALTER}" >> .env
+            echo "DB_NAME_ALTER=${DB_NAME_ALTER}" >> .env
+            echo "DB_USER_ALTER=${DB_USER_ALTER}" >> .env
+            echo "DB_PASSWORD_ALTER=${DB_PASSWORD_ALTER}" >> .env
+            echo "ENV_TYPE=${ENV_TYPE}" >> .env
+            echo "REDIS_HOST=${REDIS_HOST}" >> .env
+            echo "REDIS_PASSWORD=${REDIS_PASSWORD}" >> .env
+            echo "REDIS_PORT=${REDIS_PORT}" >> .env
+            echo "SECRET_PASSPHRASE_ADDRESS=${SECRET_PASSPHRASE_ADDRESS}" >> .env
+            echo "SECRET_PASSPHRASE_DOCUMENT=${SECRET_PASSPHRASE_DOCUMENT}" >> .env
+            echo "SECRET_PASSPHRASE_GENDER=${SECRET_PASSPHRASE_GENDER}" >> .env
+            echo "SECRET_PASSPHRASE_LASTNAME=${SECRET_PASSPHRASE_LASTNAME}" >> .env
+            echo "SECRET_PASSPHRASE_LOGIN=${SECRET_PASSPHRASE_LOGIN}" >> .env
+            echo "SECRET_PASSPHRASE_NAME=${SECRET_PASSPHRASE_NAME}" >> .env
+            echo "SECRET_PASSPHRASE_PHONE=${SECRET_PASSPHRASE_PHONE}" >> .env
+            echo "$PWD/.env"
+
+      - run:
+          name: Show .env
+          command: |
+            cp $PWD/.env $PWD/api/.env
+            cat "$PWD/api/.env"
+
+      - run:
+          name: Install Ansible if not present
+          command: |
+            if ! command -v ansible-playbook &> /dev/null
+            then
+              echo "Ansible not found. Installing Ansible."
+              sudo yum install -y ansible
+            else
+              echo "Ansible is already installed."
+            fi
+
+      - run:
+          name: Save .env contents to variable with replacements
+          command: |
+            # Leer el contenido del archivo .env y reemplazar los saltos de línea con ####A####
+            ENV_CONTENT=$(cat .env | sed ':a;N;$!ba;s/\n/####A####/g')
+            echo "ENV_CONTENT=$ENV_CONTENT" >> $BASH_ENV
+
+      - run:
+          name: Save PERSONAL_ACCESS_TOKEN
+          command: |
+            # Leer el contenido del archivo .env y reemplazar los saltos de línea con ####A####
+            echo "PERSONAL_ACCESS_TOKEN=${PERSONAL_ACCESS_TOKEN}" >> $BASH_ENV
+      - run:
+          name: Save PERSONAL_ACCESS_TOKEN
+          command: |
+            # Leer el contenido del archivo .env y reemplazar los saltos de línea con ####A####
+            echo "PERSONAL_ACCESS_TOKEN:$PERSONAL_ACCESS_TOKEN"
+
+      - run:
+          name: List directories and files after copying
+          command: ls -R
+
+      - run:
+          name: Run Ansible playbook
+          command: |
+            ansible-playbook -i /home/serversconfig/inventory/hosts -l serversdevintegrations /home/serversconfig/playbook.yml --extra-vars "github_token=${PERSONAL_ACCESS_TOKEN} env_content=${ENV_CONTENT}" -vvv > /tmp/ansible_output.log 2>&1
+            echo $? > /tmp/ansible_status
+          environment:
+            ENV_CONTENT: $ENV_CONTENT
+            PERSONAL_ACCESS_TOKEN: $PERSONAL_ACCESS_TOKEN
+            ANSIBLE_HOST_KEY_CHECKING: false
+          when: always
+
+      - run:
+          name: Get current date
+          command: |
+            echo "DATE='$(date)'" >> $BASH_ENV
+            
+            # Leer el archivo de log y buscar el resumen de PLAY RECAP
+            if grep -q 'PLAY RECAP' /tmp/ansible_output.log; then
+              if grep -q 'failed=0' /tmp/ansible_output.log; then
+                echo "ANSIBLE_STATUS='✅ Success'" >> $BASH_ENV
+              else
+                echo "ANSIBLE_STATUS='❌ Error'" >> $BASH_ENV
+              fi
+            else
+              echo "ANSIBLE_STATUS='❌ Error NO PLAY RECAP'" >> $BASH_ENV
+            fi
+
+          when: always
+          continue-on-error: true
+
+
+      - run:
+          name: Mostrar el contenido de $BASH_ENV para depuración
+          command: cat $BASH_ENV
+
+      - run:
+          name: Notify Slack
+          command: |
+            echo "DATE=${DATE}"
+            echo "ANSIBLE_STATUS=${ANSIBLE_STATUS}"
+            # Enviar notificación a Slack
+            curl -X POST -H 'Content-type: application/json' --data '{"text":"🚀 *Deploy Code*: *BackendDevIntegrations* \n📅 Date: *'"${DATE}"'* \nStatus: '"${ANSIBLE_STATUS}"'"}' ${SLACK_WEBHOOK_URL}
+          when: always
+          continue-on-error: true
+
+  build-and-deploy-enviromentdev-branches-ansible:
+    machine: true
+    resource_class: mudkdqbrj2wwlblhi1casx/enviromentdev
+    steps:
+      - checkout
+      - run:
+          name: Checkout a la rama específica
+          command: |
+            git fetch origin  # Asegúrate de tener la información más reciente
+            git checkout $CIRCLE_BRANCH
+
+
+      - run:
+          name: Get the current branch name
+          command: |
+            BRANCH_NAME_COMPLETE=$CIRCLE_BRANCH
+            echo "BRANCH_NAME_COMPLETE=$CIRCLE_BRANCH" >> $BASH_ENV
+
+      - run:
+          name: Format the branch name
+          command: |
+            BRANCH_NAME=$CIRCLE_BRANCH
+            # Extrae la parte relevante del nombre de la rama
+            FORMATTED_BRANCH=$(echo $BRANCH_NAME | sed -E 's#.*/(VSFT|GEP|STI|GEBD|GEC|GEPC|GEPD|GER)-([0-9]+)-[^-]*#/\1-\2#')
+            echo "BRANCH_NAME=$FORMATTED_BRANCH"
+            echo "BRANCH_NAME=$FORMATTED_BRANCH" >> $BASH_ENV
+
+      - run:
+          name: Mostrar Usuario de CentOS
+          command: |
+            echo "El usuario de CentOS que está ejecutando las acciones es $USER"
+
+      - run:
+          name: Set vars to .env
+          command: |
+            # Crea un archivo .env con todas las variables del contexto
+            echo "APP_PASSKEY=${APP_PASSKEY}" > .env
+            echo "ARM_KEY_ALGARIN=${ARM_KEY_ALGARIN}" >> .env
+            echo "ARM_KEY_DANIEL=${ARM_KEY_DANIEL}" >> .env
+            echo "ARM_KEY_JERSON=${ARM_KEY_JERSON}" >> .env
+            echo "ARM_KEY_JULIAN=${ARM_KEY_JULIAN}" >> .env
+            echo "DB_HOST=${DB_HOST}" >> .env
+            echo "DB_NAME=${DB_NAME}" >> .env
+            echo "DB_PASSWORD=${DB_PASSWORD}" >> .env
+            echo "DB_USER=${DB_USER}" >> .env
+            echo "DB_HOST_ALTER=${DB_HOST_ALTER}" >> .env
+            echo "DB_NAME_ALTER=${DB_NAME_ALTER}" >> .env
+            echo "DB_USER_ALTER=${DB_USER_ALTER}" >> .env
+            echo "DB_PASSWORD_ALTER=${DB_PASSWORD_ALTER}" >> .env
+            echo "ENV_TYPE=${ENV_TYPE}" >> .env
+            echo "REDIS_HOST=${REDIS_HOST}" >> .env
+            echo "REDIS_PASSWORD=${REDIS_PASSWORD}" >> .env
+            echo "REDIS_PORT=${REDIS_PORT}" >> .env
+            echo "SECRET_PASSPHRASE_ADDRESS=${SECRET_PASSPHRASE_ADDRESS}" >> .env
+            echo "SECRET_PASSPHRASE_DOCUMENT=${SECRET_PASSPHRASE_DOCUMENT}" >> .env
+            echo "SECRET_PASSPHRASE_GENDER=${SECRET_PASSPHRASE_GENDER}" >> .env
+            echo "SECRET_PASSPHRASE_LASTNAME=${SECRET_PASSPHRASE_LASTNAME}" >> .env
+            echo "SECRET_PASSPHRASE_LOGIN=${SECRET_PASSPHRASE_LOGIN}" >> .env
+            echo "SECRET_PASSPHRASE_NAME=${SECRET_PASSPHRASE_NAME}" >> .env
+            echo "SECRET_PASSPHRASE_PHONE=${SECRET_PASSPHRASE_PHONE}" >> .env
+            echo "$PWD/.env"
+
+      - run:
+          name: Show .env
+          command: |
+            cp $PWD/.env $PWD/api/.env
+            cat "$PWD/api/.env"
+
+      - run:
+          name: Install Ansible if not present
+          command: |
+            if ! command -v ansible-playbook &> /dev/null
+            then
+              echo "Ansible not found. Installing Ansible."
+              sudo yum install -y ansible
+            else
+              echo "Ansible is already installed."
+            fi
+
+      - run:
+          name: Save .env contents to variable with replacements
+          command: |
+            # Leer el contenido del archivo .env y reemplazar los saltos de línea con ####A####
+            ENV_CONTENT=$(cat .env | sed ':a;N;$!ba;s/\n/####A####/g')
+            echo "ENV_CONTENT=$ENV_CONTENT" >> $BASH_ENV
+
+      - run:
+          name: Save PERSONAL_ACCESS_TOKEN
+          command: |
+            # Leer el contenido del archivo .env y reemplazar los saltos de línea con ####A####
+            echo "PERSONAL_ACCESS_TOKEN=${PERSONAL_ACCESS_TOKEN}" >> $BASH_ENV
+      - run:
+          name: Save PERSONAL_ACCESS_TOKEN
+          command: |
+            # Leer el contenido del archivo .env y reemplazar los saltos de línea con ####A####
+            echo "PERSONAL_ACCESS_TOKEN:$PERSONAL_ACCESS_TOKEN"
+
+      - run:
+          name: List directories and files after copying
+          command: ls -R
+
+      - run:
+          name: Mostrar el contenido de $BASH_ENV para depuración
+          command: cat $BASH_ENV
+
+      - run:
+          name: Run Ansible playbook
+          command: |
+            ansible-playbook -i /home/serversconfig/inventory/hosts -l serversdevbranches /home/serversconfig/playbook.yml --extra-vars "github_token=${PERSONAL_ACCESS_TOKEN} env_content=${ENV_CONTENT} branch=${BRANCH_NAME} branch_complete=${BRANCH_NAME_COMPLETE}" -vvv > /tmp/ansible_output.log 2>&1
+            echo $? > /tmp/ansible_status
+          environment:
+            CIRCLE_BRANCH: $CIRCLE_BRANCH
+            ENV_CONTENT: $ENV_CONTENT
+            BRANCH_NAME: $BRANCH_NAME
+            BRANCH_NAME_COMPLETE: $BRANCH_NAME_COMPLETE
+            PERSONAL_ACCESS_TOKEN: $PERSONAL_ACCESS_TOKEN
+            ANSIBLE_HOST_KEY_CHECKING: false
+          when: always
+
+      - run:
+          name: Get current date
+          command: |
+            echo "DATE='$(date)'" >> $BASH_ENV
+            
+            # Leer el archivo de log y buscar el resumen de PLAY RECAP
+            if grep -q 'PLAY RECAP' /tmp/ansible_output.log; then
+              if grep -q 'failed=0' /tmp/ansible_output.log; then
+                echo "ANSIBLE_STATUS='✅ Success'" >> $BASH_ENV
+              else
+                echo "ANSIBLE_STATUS='❌ Error'" >> $BASH_ENV
+              fi
+            else
+              echo "ANSIBLE_STATUS='❌ Error NO PLAY RECAP'" >> $BASH_ENV
+            fi
+
+          when: always
+          continue-on-error: true
+
+
+      - run:
+          name: Mostrar el contenido de $BASH_ENV para depuración
+          command: cat $BASH_ENV
+
+      - run:
+          name: Notify Slack
+          command: |
+            echo "DATE=${DATE}"
+            echo "ANSIBLE_STATUS=${ANSIBLE_STATUS}"
+            # Enviar notificación a Slack
+            curl -X POST -H 'Content-type: application/json' --data '{"text":"🚀 *Deploy Code*: *BackendDevBranches* -> '"${BRANCH_NAME_COMPLETE}"' \n📅 Date: *'"${DATE}"'* \nStatus: '"${ANSIBLE_STATUS}"'"}' ${SLACK_WEBHOOK_URL}
+          when: always
+          continue-on-error: true
+
+  build-and-deploy-main-ansible:
+    machine: true
+    resource_class: mudkdqbrj2wwlblhi1casx/enviromentdev
+    steps:
+      - checkout
+      - run:
+          name: Checkout a la rama específica
+          command: |
+            git fetch origin  # Asegúrate de tener la información más reciente
+            git checkout main
+
+
+      - run:
+          name: Mostrar Usuario de CentOS
+          command: |
+            echo "El usuario de CentOS que está ejecutando las acciones es $USER"
+
+      - run:
+          name: Set vars to .env
+          command: |
+            # Crea un archivo .env con todas las variables del contexto
+            echo "APP_PASSKEY=${APP_PASSKEY}" > .env
+            echo "ARM_KEY_ALGARIN=${ARM_KEY_ALGARIN}" >> .env
+            echo "ARM_KEY_DANIEL=${ARM_KEY_DANIEL}" >> .env
+            echo "ARM_KEY_JERSON=${ARM_KEY_JERSON}" >> .env
+            echo "ARM_KEY_JULIAN=${ARM_KEY_JULIAN}" >> .env
+            echo "DB_HOST=${DB_HOST}" >> .env
+            echo "DB_NAME=${DB_NAME}" >> .env
+            echo "DB_PASSWORD=${DB_PASSWORD}" >> .env
+            echo "DB_USER=${DB_USER}" >> .env
+            echo "DB_HOST_ALTER=${DB_HOST_ALTER}" >> .env
+            echo "DB_NAME_ALTER=${DB_NAME_ALTER}" >> .env
+            echo "DB_USER_ALTER=${DB_USER_ALTER}" >> .env
+            echo "DB_PASSWORD_ALTER=${DB_PASSWORD_ALTER}" >> .env
+            echo "ENV_TYPE=${ENV_TYPE}" >> .env
+            echo "REDIS_HOST=${REDIS_HOST}" >> .env
+            echo "REDIS_PASSWORD=${REDIS_PASSWORD}" >> .env
+            echo "REDIS_PORT=${REDIS_PORT}" >> .env
+            echo "SECRET_PASSPHRASE_ADDRESS=${SECRET_PASSPHRASE_ADDRESS}" >> .env
+            echo "SECRET_PASSPHRASE_DOCUMENT=${SECRET_PASSPHRASE_DOCUMENT}" >> .env
+            echo "SECRET_PASSPHRASE_GENDER=${SECRET_PASSPHRASE_GENDER}" >> .env
+            echo "SECRET_PASSPHRASE_LASTNAME=${SECRET_PASSPHRASE_LASTNAME}" >> .env
+            echo "SECRET_PASSPHRASE_LOGIN=${SECRET_PASSPHRASE_LOGIN}" >> .env
+            echo "SECRET_PASSPHRASE_NAME=${SECRET_PASSPHRASE_NAME}" >> .env
+            echo "SECRET_PASSPHRASE_PHONE=${SECRET_PASSPHRASE_PHONE}" >> .env
+            echo "$PWD/.env"
+
+      - run:
+          name: Show .env
+          command: |
+            cp $PWD/.env $PWD/api/.env
+            cat "$PWD/api/.env"
+
+      - run:
+          name: Install Ansible if not present
+          command: |
+            if ! command -v ansible-playbook &> /dev/null
+            then
+              echo "Ansible not found. Installing Ansible."
+              sudo yum install -y ansible
+            else
+              echo "Ansible is already installed."
+            fi
+
+      - run:
+          name: Save .env contents to variable with replacements
+          command: |
+            # Leer el contenido del archivo .env y reemplazar los saltos de línea con ####A####
+            ENV_CONTENT=$(cat .env | sed ':a;N;$!ba;s/\n/####A####/g')
+            echo "ENV_CONTENT=$ENV_CONTENT" >> $BASH_ENV
+
+      - run:
+          name: Save PERSONAL_ACCESS_TOKEN
+          command: |
+            # Leer el contenido del archivo .env y reemplazar los saltos de línea con ####A####
+            echo "PERSONAL_ACCESS_TOKEN=${PERSONAL_ACCESS_TOKEN}" >> $BASH_ENV
+      - run:
+          name: Save PERSONAL_ACCESS_TOKEN
+          command: |
+            # Leer el contenido del archivo .env y reemplazar los saltos de línea con ####A####
+            echo "PERSONAL_ACCESS_TOKEN:$PERSONAL_ACCESS_TOKEN"
+
+      - run:
+          name: List directories and files after copying
+          command: ls -R
+
+      - run:
+          name: Run Ansible playbook
+          command: |
+            ansible-playbook -i /home/serversconfig/inventory/hosts -l servers /home/serversconfig/playbook.yml --extra-vars "github_token=${PERSONAL_ACCESS_TOKEN} env_content=${ENV_CONTENT}" -vvv > /tmp/ansible_output.log 2>&1
+            echo $? > /tmp/ansible_status
+          environment:
+            ENV_CONTENT: $ENV_CONTENT
+            PERSONAL_ACCESS_TOKEN: $PERSONAL_ACCESS_TOKEN
+            ANSIBLE_HOST_KEY_CHECKING: false
+          when: always
+
+      - run:
+          name: Get current date
+          command: |
+            echo "DATE='$(date)'" >> $BASH_ENV
+            
+            # Leer el archivo de log y buscar el resumen de PLAY RECAP
+            if grep -q 'PLAY RECAP' /tmp/ansible_output.log; then
+              if grep -q 'failed=0' /tmp/ansible_output.log; then
+                echo "ANSIBLE_STATUS='✅ Success'" >> $BASH_ENV
+              else
+                echo "ANSIBLE_STATUS='❌ Error'" >> $BASH_ENV
+              fi
+            else
+              echo "ANSIBLE_STATUS='❌ Error NO PLAY RECAP'" >> $BASH_ENV
+            fi
+
+          when: always
+          continue-on-error: true
+
+
+      - run:
+          name: Mostrar el contenido de $BASH_ENV para depuración
+          command: cat $BASH_ENV
+
+      - run:
+          name: Notify Slack
+          command: |
+            echo "DATE=${DATE}"
+            echo "ANSIBLE_STATUS=${ANSIBLE_STATUS}"
+            # Enviar notificación a Slack
+            curl -X POST -H 'Content-type: application/json' --data '{"text":"🚀 *Deploy Code*: *BackendProd* \n📅 Date: *'"${DATE}"'* \nStatus: '"${ANSIBLE_STATUS}"'"}' ${SLACK_WEBHOOK_URL}
+          when: always
+          continue-on-error: true
+
+workflows:
+  version: 2
+  deploy:
+    jobs:
+      - build-and-deploy-enviromentdev:
+          context: BACKEND DEV
+          filters:
+            branches:
+              only:
+                -  enviromentdev
+
+
+      - build-and-deploy-enviromentdev-branches-ansible:
+          context: BACKEND DEV
+          filters:
+            branches:
+              only:
+                -  /^feature\/.*/
+
+      - build-and-deploy-enviromentdev-ansible:
+          context: BACKEND DEV
+          filters:
+            branches:
+              only:
+                -  enviromentdev
+
+      - build-and-deploy-enviromentdevintegrations-ansible:
+          context: BACKEND DEV
+          filters:
+            branches:
+              only:
+                -  enviromentdevintegrations
+
+
+      - build-and-deploy-main-ansible:
+          context: BACKEND PROD
+          filters:
+            branches:
+              only:
+                -  enviromentdev
