@@ -20,11 +20,11 @@ jobs:
         id: version
         run: echo "VERSION=$(cat VERSION.txt)" >> $GITHUB_OUTPUT
 
-      - name: Crear tag con la versión
+      - name: Establecer remote autenticado con token
+        run: |
+          git remote set-url origin https://karlaVirtual:${{ secrets.GH_TOKEN }}@github.com/KarlaVirtual/back_test.git
+
+      - name: Crear y pushear tag con versión
         run: |
           git tag ${{ steps.version.outputs.VERSION }}
-
-      - name: Push tag a GitHub
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GH_TOKEN }}
+          git push origin ${{ steps.version.outputs.VERSION }}
