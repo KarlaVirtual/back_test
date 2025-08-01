@@ -11,7 +11,7 @@ jobs:
 
     steps:
       - name: Checkout del código
-      - uses: actions/checkout@v3
+        uses: actions/checkout@v3
         with:
           token: ${{ secrets.PAT_PUSH_TOKEN }}
 
@@ -22,18 +22,13 @@ jobs:
 
       - name: Incrementar versión en VERSION.txt y hacer commit
         run: |
-          # Leer versión actual (sin 'v')
           VERSION_ANTERIOR=$(cat VERSION.txt | tr -d 'v')
           echo "Versión anterior: $VERSION_ANTERIOR"
 
-          # Separar en partes
           IFS='.' read -r major minor patch <<< "$VERSION_ANTERIOR"
-
-          # Incrementar patch
           NUEVA_VERSION="$major.$minor.$((patch+1))"
           echo "Nueva versión: v$NUEVA_VERSION"
 
-          # Sobrescribir archivo
           echo "v$NUEVA_VERSION" > VERSION.txt
 
       - name: Hacer commit del archivo VERSION.txt
@@ -47,16 +42,17 @@ jobs:
         run: |
           git config --global user.email "karla@example.com"
           git config --global user.name "Karla Ramirez"
-          git remote set-url origin https://KarlaVirtual:${GH_PAT}@github.com/KarlaVirtual/back_test.git
+          git remote set-url origin https://x-access-token:${GH_PAT}@github.com/KarlaVirtual/back_test.git
           git push origin main
-      
-        #Push del tag
+
       - name: Crear y hacer push del tag
         env:
           TOKEN: ${{ secrets.PAT_PUSH_TOKEN }}
         run: |
           VERSION=$(cat VERSION.txt | tr -d 'v')
           TAG="v$VERSION"
+          git tag -d $TAG || true
+          git push origin :refs/tags/$TAG || true
           git tag $TAG
           git push origin $TAG
 
