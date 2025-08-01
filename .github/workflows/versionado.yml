@@ -11,12 +11,14 @@ jobs:
 
     steps:
       - name: Checkout del código
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.PAT_PUSH_TOKEN }}
 
       - name: Configurar Git
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "KarlaVirtual"
+          git config user.email "karla.ramirez@virtualsoft.tech"
 
       - name: Incrementar versión en VERSION.txt y hacer commit
         run: |
@@ -39,11 +41,13 @@ jobs:
           git add VERSION.txt
           git commit -m "chore: actualizar versión automática [skip ci]" || echo "Sin cambios"
 
-      - name: Push cambios con token clásico
+      - name: Configurar git y hacer push con token clásico
+        env:
+          GH_PAT: ${{ secrets.PAT_PUSH_TOKEN }}
         run: |
           git config --global user.email "karla@example.com"
           git config --global user.name "Karla Ramirez"
-          git remote set-url origin https://KarlaVirtual:${{ secrets.PAT_PUSH_TOKEN }}@github.com/KarlaVirtual/back_test.git
+          git remote set-url origin https://KarlaVirtual:${GH_PAT}@github.com/KarlaVirtual/back_test.git
           git push origin main
       
         #Push del tag
