@@ -1,7 +1,4 @@
-name: Versionado y Push
-
-permissions:
-  contents: write
+name: Versionado y generación de imagen en Oracle
 
 on:
   push:
@@ -9,19 +6,19 @@ on:
       - main
 
 jobs:
-  versionar-y-pushear:
+  versionar-y-generar-imagen:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout del código
         uses: actions/checkout@v3
 
-      - name: Configurar usuario Git
+      - name: Configurar Git
         run: |
-          git config --global user.email "karla.ramirez@virtualsoft.tech"
-          git config --global user.name "KarlaVirtual"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Incrementar versión en VERSION.txt y hacer commit con tag
+      - name: Incrementar versión en VERSION.txt y hacer commit
         run: |
           # Leer versión actual (sin 'v')
           VERSION_ANTERIOR=$(cat VERSION.txt | tr -d 'v')
@@ -37,22 +34,29 @@ jobs:
           # Sobrescribir archivo
           echo "v$NUEVA_VERSION" > VERSION.txt
 
-          # Hacer commit y tag
-          git add VERSION.txt
-          git commit -m "chore: bump version to v$NUEVA_VERSION"
-          git tag "v$NUEVA_VERSION"
-
-          # Establecer remote con token
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/KarlaVirtual/back_test.git
-
-          # Push con tag
-          git push origin main
-          git push origin "v$NUEVA_VERSION"
-
-      - name: Simular creación de imagen
+      - name: Hacer commit del archivo VERSION.txt
         run: |
-          VERSION=$(cat VERSION.txt)
-          IMAGE_NAME="back_test-$VERSION"
-      
-          echo "Simulando creación de imagen: $IMAGE_NAME"
-          echo "oci compute image create --instance-id OCID --display-name $IMAGE_NAME --compartment-id OCID"
+          git add VERSION.txt
+          git commit -m "chore: actualizar versión automática [skip ci]" || echo "Sin cambios"
+
+      - name: Push del archivo de versión
+        env:
+          TOKEN: ${{ secrets.PAT_PUSH_TOKEN }}
+        run: |
+          git remote set-url origin https://x-access-token:${TOKEN}@github.com/${{ github.repository }}
+          git push origin main
+
+        #Push del tag
+      - name: Crear y hacer push del tag
+        env:
+          TOKEN: ${{ secrets.PAT_PUSH_TOKEN }}
+        run: |
+          VERSION=$(cat VERSION.txt | tr -d 'v')
+          TAG="v$VERSION"
+          git tag $TAG
+          git push origin $TAG
+
+      - name: Disparar construcción de imagen en Oracle (simulado)
+        run: |
+          echo "Llamar al endpoint de Oracle para construir imagen..."
+          # curl -X POST "https://oracle-api/imagen/build" -H "Authorization: Bearer ${{ secrets.ORACLE_API_TOKEN }}"
