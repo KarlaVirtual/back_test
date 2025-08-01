@@ -21,25 +21,30 @@ jobs:
           git config --global user.email "karla.ramirez@virtualsoft.tech"
           git config --global user.name "KarlaVirtual"
 
-      - name: Calcular nueva versión
-        id: version
+      - name: Incrementar versión en VERSION.txt y hacer commit con tag
         run: |
-          VERSION="v$(date +'%Y.%m.%d.%H%M')"
-          echo "$VERSION" > VERSION.txt
-          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          # Leer versión actual (sin 'v')
+          VERSION_ANTERIOR=$(cat VERSION.txt | tr -d 'v')
+          echo "Versión anterior: $VERSION_ANTERIOR"
 
-      - name: Commit y Tag del versionado
-        run: |
+          # Separar en partes
+          IFS='.' read -r major minor patch <<< "$VERSION_ANTERIOR"
+
+          # Incrementar patch
+          NUEVA_VERSION="$major.$minor.$((patch+1))"
+          echo "Nueva versión: v$NUEVA_VERSION"
+
+          # Sobrescribir archivo
+          echo "v$NUEVA_VERSION" > VERSION.txt
+
+          # Hacer commit y tag
           git add VERSION.txt
-          git commit -m "chore: version ${VERSION}"
-          git tag ${VERSION}
-        env:
-          VERSION: ${{ steps.version.outputs.VERSION }}
+          git commit -m "chore: bump version to v$NUEVA_VERSION"
+          git tag "v$NUEVA_VERSION"
 
-      - name: Establecer nuevo remoto con GITHUB_TOKEN
-        run: |
+          # Establecer remote con token
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/KarlaVirtual/back_test.git
 
-      - name: Push con tags
-        run: |
-          git push origin main --follow-tags
+          # Push con tag
+          git push origin main
+          git push origin "v$NUEVA_VERSION"
