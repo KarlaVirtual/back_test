@@ -1,4 +1,7 @@
-name: Bump version and push tags
+name: Versionado y Push
+
+permissions:
+  contents: write
 
 on:
   push:
@@ -6,30 +9,37 @@ on:
       - main
 
 jobs:
-  version-bump:
+  versionar-y-pushear:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - name: Checkout del código
+        uses: actions/checkout@v3
 
-      - name: Bump version
+      - name: Configurar usuario Git
         run: |
-          CURRENT_VERSION=$(cat VERSION.txt | tr -d 'v')
-          echo "Versión actual: $CURRENT_VERSION"
-          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
-          NEW_VERSION="$major.$minor.$((patch+1))"
-          echo "Nueva versión: v$NEW_VERSION"
-          echo "v$NEW_VERSION" > VERSION.txt
-          git config user.name "KarlaVirtual"
-          git config user.email "karla.ramirez@virtualsoft.tech"
-          git commit -am "Bump versión automática: v$NEW_VERSION"
-          git tag "v$NEW_VERSION"
+          git config --global user.email "karla.ramirez@virtualsoft.tech"
+          git config --global user.name "KarlaVirtual"
 
-      - name: Push cambios y tags
+      - name: Calcular nueva versión
+        id: version
+        run: |
+          VERSION="v$(date +'%Y.%m.%d.%H%M')"
+          echo "$VERSION" > VERSION.txt
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Commit y Tag del versionado
+        run: |
+          git add VERSION.txt
+          git commit -m "chore: version ${VERSION}"
+          git tag ${VERSION}
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+
+      - name: Establecer nuevo remoto con GITHUB_TOKEN
         run: |
-          git config --global user.email "karla.ramirez@virtualsoft.tech" 
-          git config --global user.name "KarlaVirtual"            
-          git remote set-url origin https://KarlaVirtual:${GH_TOKEN}@github.com/KarlaVirtual/back_test.git
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/KarlaVirtual/back_test.git
+
+      - name: Push con tags
+        run: |
           git push origin main --follow-tags
