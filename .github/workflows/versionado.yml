@@ -39,11 +39,20 @@ jobs:
           git add VERSION.txt
           git commit -m "chore: actualizar versión automática [skip ci]" || echo "Sin cambios"
 
-      - name: Push del archivo de versión
+      - name: Push cambios al repositorio
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git remote set-url origin https://x-access-token:${{ secrets.PAT_PUSH_TOKEN }}@github.com/${{ github.repository }}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Autenticación con el token
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/KarlaVirtual/back_test.git
+      
+          git add VERSION.txt
+          git commit -m "Versión actualizada automáticamente [ci skip]" || echo "No hay cambios"
           git push origin main
-
+      
         #Push del tag
       - name: Crear y hacer push del tag
         env:
