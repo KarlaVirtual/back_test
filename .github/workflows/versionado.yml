@@ -40,10 +40,8 @@ jobs:
           git commit -m "chore: actualizar versión automática [skip ci]" || echo "Sin cambios"
 
       - name: Push del archivo de versión
-        env:
-          TOKEN: ${{ secrets.PAT_PUSH_TOKEN }}
         run: |
-          git remote set-url origin https://x-access-token:${TOKEN}@github.com/${{ github.repository }}
+          git remote set-url origin https://x-access-token:${{ secrets.PAT_PUSH_TOKEN }}@github.com/${{ github.repository }}
           git push origin main
 
         #Push del tag
