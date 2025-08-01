@@ -48,3 +48,11 @@ jobs:
           # Push con tag
           git push origin main
           git push origin "v$NUEVA_VERSION"
+
+      - name: Simular creación de imagen
+        run: |
+          VERSION=$(cat VERSION.txt)
+          IMAGE_NAME="back_test-$VERSION"
+      
+          echo "Simulando creación de imagen: $IMAGE_NAME"
+          echo "oci compute image create --instance-id OCID --display-name $IMAGE_NAME --compartment-id OCID"
