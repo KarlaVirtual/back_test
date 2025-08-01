@@ -21,12 +21,18 @@ jobs:
           git config --global user.email "karla.ramirez@virtualsoft.tech"
           git config --global user.name "KarlaVirtual"
 
-      - name: Calcular nueva versión
-        id: version
+      - name: Bump version
         run: |
-          VERSION="v$(date +'%Y.%m.%d.%H%M')"
-          echo "$VERSION" > VERSION.txt
-          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          CURRENT_VERSION=$(cat VERSION.txt | tr -d 'v')
+          echo "Versión actual: $CURRENT_VERSION"
+          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+          NEW_VERSION="$major.$minor.$((patch+1))"
+          echo "Nueva versión: v$NEW_VERSION"
+          echo "v$NEW_VERSION" > VERSION.txt
+          git config user.name "KarlaVirtual"
+          git config user.email "karla.ramirez@virtualsoft.tech"
+          git commit -am "Bump versión automática: v$NEW_VERSION"
+          git tag "v$NEW_VERSION"
 
       - name: Commit y Tag del versionado
         run: |
