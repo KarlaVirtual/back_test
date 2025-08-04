@@ -1,5 +1,8 @@
+# Nombre del pipeline visible en GitHub Actions
 name: Versionado y generación de imagen en Oracle
 
+# Evento que dispara el pipeline:
+# Se ejecuta cuando se cierra un Pull Request hacia la rama main
 on:
   pull_request:
     branches:
@@ -8,37 +11,46 @@ on:
       - closed  # Detecta cuando el PR se cierra
 
 jobs:
+  # Definición del job principal
   versionar-y-generar-imagen:
-    if: github.event.pull_request.merged == true  # Ejecuta solo si fue fusionado
-    runs-on: ubuntu-latest
+    # Condición: solo ejecuta si el Pull Request fue fusionado (merged == true)
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest  # El job corre sobre una máquina virtual Ubuntu
 
     steps:
+      # Paso 1: Clona el repositorio en la máquina virtual de GitHub Actions
       - name: Checkout del código
         uses: actions/checkout@v3
         with:
-          token: ${{ secrets.PAT_PUSH_TOKEN }}
+          token: ${{ secrets.PAT_PUSH_TOKEN }}  # Token con permisos de escritura
 
+      # Paso 2: Configura los datos de usuario de Git para hacer commits
       - name: Configurar Git
         run: |
           git config user.name "KarlaVirtual"
           git config user.email "karla.ramirez@virtualsoft.tech"
 
+      # Paso 3: Lee la versión anterior, la incrementa automáticamente en el patch, y la guarda en VERSION.txt
       - name: Incrementar versión en VERSION.txt y hacer commit
         run: |
-          VERSION_ANTERIOR=$(cat VERSION.txt | tr -d 'v')
+          VERSION_ANTERIOR=$(cat VERSION.txt | tr -d 'v')  # Elimina la "v"
           echo "Versión anterior: $VERSION_ANTERIOR"
 
           IFS='.' read -r major minor patch <<< "$VERSION_ANTERIOR"
-          NUEVA_VERSION="$major.$minor.$((patch+1))"
+          NUEVA_VERSION="$major.$minor.$((patch+1))"  # Incrementa el patch
           echo "Nueva versión: v$NUEVA_VERSION"
 
-          echo "v$NUEVA_VERSION" > VERSION.txt
+          echo "v$NUEVA_VERSION" > VERSION.txt  # Guarda la nueva versión
 
+      # Paso 4: Hace commit de la nueva versión del archivo VERSION.txt
       - name: Hacer commit del archivo VERSION.txt
         run: |
           git add VERSION.txt
           git commit -m "chore: actualizar versión automática [skip ci]" || echo "Sin cambios"
+          # El mensaje incluye "[skip ci]" para evitar bucles de builds
+          # Si no hay cambios (por ejemplo, versión ya estaba igual), no falla
 
+      # Paso 5: Reconfigura el `remote` y hace push al repositorio con token
       - name: Configurar git y hacer push con token clásico
         env:
           GH_PAT: ${{ secrets.PAT_PUSH_TOKEN }}
@@ -48,18 +60,21 @@ jobs:
           git remote set-url origin https://x-access-token:${GH_PAT}@github.com/KarlaVirtual/back_test.git
           git push origin main
 
+      # Paso 6: Elimina el tag anterior (si existe), lo vuelve a crear y lo sube
       - name: Crear y hacer push del tag
         env:
           TOKEN: ${{ secrets.PAT_PUSH_TOKEN }}
         run: |
           VERSION=$(cat VERSION.txt | tr -d 'v')
           TAG="v$VERSION"
-          git tag -d $TAG || true
-          git push origin :refs/tags/$TAG || true
-          git tag $TAG
-          git push origin $TAG
+          git tag -d $TAG || true  # Borra el tag local si existe
+          git push origin :refs/tags/$TAG || true  # Borra el tag remoto si existe
+          git tag $TAG  # Crea el nuevo tag
+          git push origin $TAG  # Lo sube al repositorio
 
+      # Paso 7: Este paso simula la llamada a Oracle para construir una imagen con la nueva versión
       - name: Disparar construcción de imagen en Oracle (simulado)
         run: |
           echo "Llamar al endpoint de Oracle para construir imagen..."
+          # Aquí iría el curl real a Oracle:
           # curl -X POST "https://oracle-api/imagen/build" -H "Authorization: Bearer ${{ secrets.ORACLE_API_TOKEN }}"
