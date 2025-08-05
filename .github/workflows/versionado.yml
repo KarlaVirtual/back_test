@@ -1,80 +1,68 @@
-# Nombre del pipeline visible en GitHub Actions
 name: Versionado y generación de imagen en Oracle
 
-# Evento que dispara el pipeline:
-# Se ejecuta cuando se cierra un Pull Request hacia la rama main
 on:
-  pull_request:
+  push:
     branches:
       - main
-    types:
-      - closed  # Detecta cuando el PR se cierra
 
 jobs:
-  # Definición del job principal
-  versionar-y-generar-imagen:
-    # Condición: solo ejecuta si el Pull Request fue fusionado (merged == true)
-    if: github.event.pull_request.merged == true
-    runs-on: ubuntu-latest  # El job corre sobre una máquina virtual Ubuntu
+  release-and-generate-image:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
 
     steps:
-      # Paso 1: Clona el repositorio en la máquina virtual de GitHub Actions
-      - name: Checkout del código
-        uses: actions/checkout@v3
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
         with:
-          token: ${{ secrets.PAT_PUSH_TOKEN }}  # Token con permisos de escritura
+          token: ${{ secrets.PAT_PUSH_TOKEN }}
 
-      # Paso 2: Configura los datos de usuario de Git para hacer commits
       - name: Configurar Git
         run: |
-          git config user.name "KarlaVirtual"
-          git config user.email "karla.ramirez@virtualsoft.tech"
+          git config --global user.name "KarlaVirtual"
+          git config --global user.email "karla.ramirez@virtualsoft.tech"
 
-      # Paso 3: Lee la versión anterior, la incrementa automáticamente en el patch, y la guarda en VERSION.txt
-      - name: Incrementar versión en VERSION.txt y hacer commit
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '21'
+
+      - name: Instalar dependencias
         run: |
-          VERSION_ANTERIOR=$(cat VERSION.txt | tr -d 'v')  # Elimina la "v"
-          echo "Versión anterior: $VERSION_ANTERIOR"
+          npm install
 
-          IFS='.' read -r major minor patch <<< "$VERSION_ANTERIOR"
-          NUEVA_VERSION="$major.$minor.$((patch+1))"  # Incrementa el patch
-          echo "Nueva versión: v$NUEVA_VERSION"
-
-          echo "v$NUEVA_VERSION" > VERSION.txt  # Guarda la nueva versión
-
-      # Paso 4: Hace commit de la nueva versión del archivo VERSION.txt
-      - name: Hacer commit del archivo VERSION.txt
+      - name: Ejecutar semantic-release
         run: |
-          git add VERSION.txt
-          git commit -m "chore: actualizar versión automática [skip ci]" || echo "Sin cambios"
-          # El mensaje incluye "[skip ci]" para evitar bucles de builds
-          # Si no hay cambios (por ejemplo, versión ya estaba igual), no falla
-
-      # Paso 5: Reconfigura el `remote` y hace push al repositorio con token
-      - name: Configurar git y hacer push con token clásico
+          npx semantic-release
         env:
-          GH_PAT: ${{ secrets.PAT_PUSH_TOKEN }}
-        run: |
-          git config --global user.email "karla@example.com"
-          git config --global user.name "Karla Ramirez"
-          git remote set-url origin https://x-access-token:${GH_PAT}@github.com/KarlaVirtual/back_test.git
-          git push origin main
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # Paso 6: Elimina el tag anterior (si existe), lo vuelve a crear y lo sube
-      - name: Crear y hacer push del tag
-        env:
-          TOKEN: ${{ secrets.PAT_PUSH_TOKEN }}
+      - name: Extraer versión desde el tag más reciente
+        id: extract_version
         run: |
-          VERSION=$(cat VERSION.txt | tr -d 'v')
-          TAG="v$VERSION"
-          git tag -d $TAG || true  # Borra el tag local si existe
-          git push origin :refs/tags/$TAG || true  # Borra el tag remoto si existe
-          git tag $TAG  # Crea el nuevo tag
-          git push origin $TAG  # Lo sube al repositorio
+          VERSION=$(git describe --tags --abbrev=0)
+          echo "Versión detectada: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      # Paso 7: Este paso simula la llamada a Oracle para construir una imagen con la nueva versión
-      - name: Disparar construcción de imagen en Oracle (simulado)
+      - name: Construir imagen en Oracle con la versión
         run: |
-          echo "Llamar al endpoint de Oracle para construir imagen..."
-          # Aquí iría el curl real a Oracle:
-          # curl -X POST "https://oracle-api/imagen/build" -H "Authorization: Bearer ${{ secrets.ORACLE_API_TOKEN }}"
+          IMAGE_NAME="back_test-${{ steps.extract_version.outputs.version }}"
+          echo "Generando imagen en Oracle con nombre: $IMAGE_NAME"
+
+          # Aquí se haría la llamada real a Oracle
+          # curl -X POST "https://oracle-api/imagen/build" -H "Authorization: Bearer ${{ secrets.ORACLE_API_TOKEN }}" \
+          # -d "{\"image_name\":\"$IMAGE_NAME\"}"
+
+      - name: Notificar en Slack (opcional)
+        run: |
+          IMAGE_NAME="back_test-${{ steps.extract_version.outputs.version }}"
+          SLACK_MESSAGE=":rocket: Imagen *$IMAGE_NAME* generada exitosamente en Oracle."
+
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"$SLACK_MESSAGE\"}" \
+            "${{ secrets.SLACK_WEBHOOK_URL }}"
