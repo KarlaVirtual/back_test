@@ -57,12 +57,3 @@ jobs:
           # Aquí se haría la llamada real a Oracle
           # curl -X POST "https://oracle-api/imagen/build" -H "Authorization: Bearer ${{ secrets.ORACLE_API_TOKEN }}" \
           # -d "{\"image_name\":\"$IMAGE_NAME\"}"
-
-      - name: Notificar en Slack (opcional)
-        run: |
-          IMAGE_NAME="back_test-${{ steps.extract_version.outputs.version }}"
-          SLACK_MESSAGE=":rocket: Imagen *$IMAGE_NAME* generada exitosamente en Oracle."
-
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{\"text\":\"$SLACK_MESSAGE\"}" \
-            "${{ secrets.SLACK_WEBHOOK_URL }}"
