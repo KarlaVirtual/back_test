@@ -1,6 +1,6 @@
 {
   "name": "versionamiento",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "versionar y automatizar imagenes de oracle",
   "main": "prueba.php",
   "scripts": {
