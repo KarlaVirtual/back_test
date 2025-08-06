@@ -22,6 +22,7 @@
  * @var mixed $log      Variable utilizada para registrar información de depuración y solicitudes.
  */
 
+
 require(__DIR__ . '../../../../../vendor/autoload.php');
 
 use Backend\dto\ConfigurationEnvironment;
