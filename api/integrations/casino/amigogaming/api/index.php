@@ -64,7 +64,6 @@ $requestOrder = "";
 ksort($_REQUEST);
 $cont = 0;
 
-
 $_ENV["enabledConnectionGlobal"] = 1;
 $_ENV["ENABLEDSETLOCKWAITTIMEOUT"] = '1';
 $date = date("Y-m-d H:i:s");
