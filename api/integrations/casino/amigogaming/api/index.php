@@ -68,7 +68,6 @@ $_ENV["enabledConnectionGlobal"] = 1;
 $_ENV["ENABLEDSETLOCKWAITTIMEOUT"] = '1';
 $date = date("Y-m-d H:i:s");
 
-
 if (strpos($URI, "authenticate.html") !== false) {
     $hash = $_REQUEST["hash"];
     $token = $_REQUEST["token"];
