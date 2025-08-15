@@ -76,6 +76,7 @@ if (true) {
         /* Procesamos */
         $G21viral = new G21viral($gameId, $token, $playerId);
 
+
         /**
          * Procesa una transacción de débito, Credito y rollback.
          */
